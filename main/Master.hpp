@@ -7,11 +7,28 @@
 #include "Defines.h"
 #include "Utils.h"
 
+unsigned long sendTimes[NUMBER_OF_DEVICES];
+
 void onDataSend(const uint8_t *mac_addr, esp_now_send_status_t status) {
-    Serial.print("Packet to: ");
-    Serial.print(macAddressToReadableString(mac_addr));
-    Serial.print(" send status:\t");
-    Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
+    // Serial.print("Send to ");
+    // Serial.print(macAddressToReadableString(mac_addr));
+    // Serial.println(status == ESP_NOW_SEND_SUCCESS ? " succeeded." : " failed.");
+}
+
+void onDataReceived(const uint8_t *mac, const uint8_t *incomingData, int len) {
+    unsigned long recvTime = micros();
+
+    int i = getDeviceNumberFromMacAddress(mac);
+    if (i < 0)
+        return;
+
+    double timeOfFlight = (recvTime - sendTimes[i]) / 1000.0 - TOF_DELAY;
+
+    Serial.print("Slave ");
+    Serial.print(getDeviceNumberFromMacAddress(mac));
+    Serial.print(" TOF:  ");
+    Serial.print(timeOfFlight);
+    Serial.println(" ms");
 }
 
 void setup() {
@@ -39,10 +56,12 @@ void setup() {
         return;
     }
 
+    // Register callbacks
     esp_now_register_send_cb(onDataSend);
+    esp_now_register_recv_cb(onDataReceived);
 
     // Add all slaves as peers
-    esp_now_peer_info_t peerInfo;
+    esp_now_peer_info_t peerInfo = {};
     peerInfo.channel = 0;
     peerInfo.encrypt = false;
 
@@ -58,17 +77,17 @@ void setup() {
 }
 
 void loop() {
+    Serial.println();
+
     test_struct test;
     test.x = random(0, 20);
     test.y = random(0, 20);
 
-    esp_err_t result = esp_now_send(0, (uint8_t *)&test, sizeof(test_struct));
-
-    if (result == ESP_OK) {
-        Serial.println("Send with success");
-    } else {
-        Serial.println("Error sending the data");
+    for (int i = 1; i < NUMBER_OF_DEVICES; ++i) {
+        sendTimes[i] = micros();
+        esp_now_send(DEVICE_MAC_ADDRESSES[i], (uint8_t *)&test, sizeof(test_struct));
+        delay(15);
     }
 
-    delay(2000);
+    delay(1000);
 }
