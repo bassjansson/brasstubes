@@ -9,4 +9,10 @@ const uint8_t DEVICE_MAC_ADDRESSES[NUMBER_OF_DEVICES][6] = {
     {0x84, 0xCC, 0xA8, 0x61, 0x26, 0xEC}, // Slave 1 - 84:CC:A8:61:26:EC
 };
 
+// Data structs
+struct test_struct {
+    int x;
+    int y;
+};
+
 #endif /* __DEFINES_H__ */
