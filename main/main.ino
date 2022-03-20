@@ -1,7 +1,10 @@
-// Comment this line when compiling for a slave device
-#define COMPILE_FOR_MASTER_DEVICE
+// Change this number to compile for a specific device
+// 0 = Master device
+// 1 to 5 = Slave devices
+#define DEVICE_NUMBER 1
 
-#ifdef COMPILE_FOR_MASTER_DEVICE
+// This selects the code depending on the device type
+#if (DEVICE_NUMBER == 0)
 #include "Master.hpp"
 #else
 #include "Slave.hpp"

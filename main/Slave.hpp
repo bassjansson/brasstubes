@@ -9,7 +9,8 @@ void setup() {
     // Init Serial
     Serial.begin(115200);
     Serial.println();
-    Serial.println("This is the MASTER device.");
+    Serial.print("This is a SLAVE device with number: ");
+    Serial.println(DEVICE_NUMBER);
     Serial.println();
 
     // Init WiFi
