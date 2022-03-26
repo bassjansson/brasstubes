@@ -13,6 +13,14 @@ const uint8_t DEVICE_MAC_ADDRESSES[NUMBER_OF_DEVICES][6] = {
     {0xC4, 0x4F, 0x33, 0x56, 0x56, 0x5D}, // Slave 3 - C4:4F:33:56:56:5D
 };
 
+// Notes
+const uint8_t DEVICE_NOTES[NUMBER_OF_DEVICES][2] = {
+    {0, 0}, // Master
+    {48, 50}, // Slave 1
+    {52, 53}, // Slave 2
+    {55, 57}, // Slave 3
+};
+
 // Data structs
 struct test_struct {
     int x;
