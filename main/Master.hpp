@@ -40,8 +40,8 @@ void midiCallback(midi_event *pev) {
     test.x = pev->data[0];
     test.y = pev->data[1];
 
-    for (int i = 1; i < NUMBER_OF_DEVICES; ++i)
-        esp_now_send(DEVICE_MAC_ADDRESSES[i], (uint8_t *)&test, sizeof(test_struct));
+    //for (int i = 1; i < NUMBER_OF_DEVICES; ++i)
+    //    esp_now_send(DEVICE_MAC_ADDRESSES[i], (uint8_t *)&test, sizeof(test_struct));
 
     // if ((pev->data[0] >= 0x80) && (pev->data[0] <= 0xe0)) {
     //     Serial.write(pev->data[0] | pev->channel);
@@ -167,6 +167,23 @@ void setup() {
     SMF.begin(&SD);
     SMF.setMidiHandler(midiCallback);
     SMF.setSysexHandler(sysexCallback);
+
+    // Sync slaves on boot
+    // TODO: sync slaves on start button and in a continues fasion
+    unsigned long startTime = millis();
+
+    for (int i = 1; i < NUMBER_OF_DEVICES; ++i) {
+        unsigned long nextTime = startTime + DEVICE_SYNC_TIMES[i];
+
+        while (nextTime > millis())
+            delay(1);
+
+        test_struct test;
+        test.x = 1;
+        test.y = DEVICE_SYNC_TIMES[i];
+
+        esp_now_send(DEVICE_MAC_ADDRESSES[i], (uint8_t *)&test, sizeof(test_struct));
+    }
 }
 
 void loop() {
@@ -184,6 +201,7 @@ void loop() {
     //
     // delay(1000);
 
+    /*
     static enum { S_IDLE, S_PLAYING, S_END, S_WAIT_BETWEEN } state = S_IDLE;
     static uint16_t currTune = ARRAY_SIZE(tuneList);
     static uint32_t timeStart;
@@ -200,6 +218,7 @@ void loop() {
         Serial.print("File: ");
         Serial.println(tuneList[currTune]);
         err = SMF.load(tuneList[currTune]);
+        SMF.restart();
         if (err != MD_MIDIFile::E_OK) {
             Serial.print(" - SMF load Error ");
             Serial.println(err);
@@ -234,4 +253,5 @@ void loop() {
         state = S_IDLE;
         break;
     }
+    */
 }

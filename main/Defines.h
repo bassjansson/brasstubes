@@ -15,16 +15,24 @@ const uint8_t DEVICE_MAC_ADDRESSES[NUMBER_OF_DEVICES][6] = {
 
 // Notes
 const uint8_t DEVICE_NOTES[NUMBER_OF_DEVICES][2] = {
-    {0, 0}, // Master
+    {0, 0},   // Master
     {48, 50}, // Slave 1
     {52, 53}, // Slave 2
     {55, 57}, // Slave 3
 };
 
+// Synchronisation times (ms)
+const unsigned long DEVICE_SYNC_TIMES[NUMBER_OF_DEVICES] = {
+    0,   // Master
+    200, // Slave 1
+    400, // Slave 2
+    600, // Slave 3
+};
+
 // Data structs
 struct test_struct {
     int x;
-    int y;
+    unsigned long y;
 };
 
 #endif /* __DEFINES_H__ */

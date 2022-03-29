@@ -7,13 +7,15 @@
 #include "Defines.h"
 #include "Utils.h"
 
+#define SYNC_LED_PIN 22
+
 #define MOTOR_A1_PIN 26 // Motor Forward pin
 #define MOTOR_A2_PIN 18 // Motor Reverse pin
 
 #define MOTOR_B1_PIN 19 // Motor Forward pin
 #define MOTOR_B2_PIN 23 // Motor Reverse pin
 
-#define ENCODER_A1_PIN 22 // Encoder Output 'A' must connected with interupt pin of arduino
+#define ENCODER_A1_PIN 33 // Encoder Output 'A' must connected with interupt pin of arduino
 #define ENCODER_A2_PIN 21 // Encoder Output 'B' must connected with interupt pin of arduino
 
 #define ENCODER_B1_PIN 16 // Encoder Output 'A' must connected with interupt pin of arduino
@@ -30,6 +32,8 @@ volatile long encoderValueA = 0; // Raw encoder value
 
 volatile int lastEncodedB = 0;   // Here updated value of encoder store.
 volatile long encoderValueB = 0; // Raw encoder value
+
+unsigned long syncTime = 0;
 
 void IRAM_ATTR updateEncoderA() {
     int MSB = digitalRead(ENCODER_A1_PIN); // MSB = most significant bit
@@ -96,13 +100,19 @@ void onDataSend(const uint8_t *mac_addr, esp_now_send_status_t status) {
 }
 
 void onDataReceived(const uint8_t *mac, const uint8_t *incomingData, int len) {
+    unsigned long receiveTime = millis();
+
     test_struct test;
     memcpy(&test, incomingData, sizeof(test));
+
+    if (test.x == 1)
+        syncTime = receiveTime - test.y;
 
     Serial.print(test.x);
     Serial.print(", ");
     Serial.println(test.y);
 
+    /*
     if (test.x == CMD_NOTE_ON) {
         if (test.y == DEVICE_NOTES[DEVICE_NUMBER][0]) {
             rotateQuarterMotorA();
@@ -110,6 +120,7 @@ void onDataReceived(const uint8_t *mac, const uint8_t *incomingData, int len) {
             rotateQuarterMotorB();
         }
     }
+    */
 
     // delay(TOF_DELAY);
     // esp_now_send(DEVICE_MAC_ADDRESSES[0], (uint8_t *)&test, sizeof(test_struct));
@@ -128,6 +139,10 @@ void onDataReceived(const uint8_t *mac, const uint8_t *incomingData, int len) {
 }
 
 void setup() {
+    // Setup LED pin
+    pinMode(SYNC_LED_PIN, OUTPUT);
+    digitalWrite(SYNC_LED_PIN, LOW);
+
     // Setup motor pins
     pinMode(MOTOR_A1_PIN, OUTPUT);
     pinMode(MOTOR_A2_PIN, OUTPUT);
@@ -204,4 +219,8 @@ void setup() {
     }
 }
 
-void loop() {}
+void loop() {
+    bool sync = (millis() - syncTime) % 1000 < 50;
+    digitalWrite(SYNC_LED_PIN, sync ? HIGH : LOW);
+    delay(1);
+}
