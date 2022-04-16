@@ -26,22 +26,30 @@ SPIClass FSPI_SPI(FSPI);
 SdFat SD;
 MD_MIDIFile SMF;
 
+#define NOTE_ON_CMD 0x90
+
+uint64_t currentTicks;
+double msPerTick;
+
 // unsigned long sendTimes[NUMBER_OF_DEVICES];
 
 // Called by the MIDIFile library when a file event needs to be processed
 // thru the midi communications interface.
 // This callback is set up in the setup() function.
 void midiCallback(midi_event *pev) {
-    Serial.print(pev->data[0]);
-    Serial.print(", ");
-    Serial.println(pev->data[1]);
+    if (pev->data[0] == NOTE_ON_CMD) {
+        Serial.print((uint64_t)(currentTicks * msPerTick + 0.6));
+        Serial.print("\t-\t");
+        Serial.print(pev->data[1]);
+        Serial.println();
+    }
 
-    test_struct test;
-    test.x = pev->data[0];
-    test.y = pev->data[1];
+    // test_struct test;
+    // test.x = pev->data[0];
+    // test.y = pev->data[1];
 
-    //for (int i = 1; i < NUMBER_OF_DEVICES; ++i)
-    //    esp_now_send(DEVICE_MAC_ADDRESSES[i], (uint8_t *)&test, sizeof(test_struct));
+    // for (int i = 1; i < NUMBER_OF_DEVICES; ++i)
+    //     esp_now_send(DEVICE_MAC_ADDRESSES[i], (uint8_t *)&test, sizeof(test_struct));
 
     // if ((pev->data[0] >= 0x80) && (pev->data[0] <= 0xe0)) {
     //     Serial.write(pev->data[0] | pev->channel);
@@ -168,8 +176,26 @@ void setup() {
     SMF.setMidiHandler(midiCallback);
     SMF.setSysexHandler(sysexCallback);
 
+    // Process entire MIDI file
+    if (SMF.load(tuneList[0]) == SMF.E_OK) {
+        msPerTick = 1000.0 / ((double)SMF.getTempo() / 60.0 * SMF.getTicksPerQuarterNote());
+        currentTicks = 0;
+
+        while (!SMF.isEOF()) {
+            SMF.processEvents(1);
+            currentTicks++;
+        }
+
+        SMF.close();
+
+        Serial.println("MIDI file processed!");
+    } else {
+        Serial.println("Error loading midi file!");
+    }
+
     // Sync slaves on boot
     // TODO: sync slaves on start button and in a continues fasion
+    /*
     unsigned long startTime = millis();
 
     for (int i = 1; i < NUMBER_OF_DEVICES; ++i) {
@@ -184,6 +210,7 @@ void setup() {
 
         esp_now_send(DEVICE_MAC_ADDRESSES[i], (uint8_t *)&test, sizeof(test_struct));
     }
+    */
 }
 
 void loop() {
