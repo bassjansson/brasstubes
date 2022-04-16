@@ -46,8 +46,10 @@ Adafruit_ST7789 tft = Adafruit_ST7789(&TFT_SPI, TFT_CS_PIN, TFT_DC_PIN, TFT_RST_
 
 AsyncWebServer server(80);
 
-uint64_t currentTicks;
+uint32_t currentTicks;
 double msPerTick;
+
+String midiData[NUMBER_OF_DEVICES];
 
 // unsigned long sendTimes[NUMBER_OF_DEVICES];
 
@@ -56,13 +58,15 @@ static void onMidiDataGetRequest(AsyncWebServerRequest *request) {
     Serial.print("Got request from slave with number: ");
     Serial.println(deviceNumber);
 
-    // String data = "Hello World! Slave = " + String(deviceNumber);
-    // request->send_P(200, "text/plain", data.c_str());
+    if (midiData[deviceNumber].length() > 1)
+        request->send_P(200, "text/plain", midiData[deviceNumber].c_str());
+    else
+        request->send_P(500, "text/plain", "No processed MIDI data present yet.");
 
-    static test_struct test;
-    test.x = deviceNumber;
-    test.y = 12345;
-    request->send_P(200, "application/octet-stream", (uint8_t *)&test, sizeof(test_struct));
+    // static test_struct test;
+    // test.x = deviceNumber;
+    // test.y = 12345;
+    // request->send_P(200, "application/octet-stream", (uint8_t *)&test, sizeof(test_struct));
 }
 
 // Called by the MIDIFile library when a file event needs to be processed
@@ -70,10 +74,15 @@ static void onMidiDataGetRequest(AsyncWebServerRequest *request) {
 // This callback is set up in the setup() function.
 void midiCallback(midi_event *pev) {
     if (pev->data[0] == CMD_NOTE_ON) {
-        tft.print((uint64_t)(currentTicks * msPerTick + 0.6));
-        tft.print("\t-\t");
-        tft.print(pev->data[1]);
-        tft.println();
+        uint32_t timeInMs = (uint32_t)(currentTicks * msPerTick + 0.6);
+
+        for (int i = 1; i < NUMBER_OF_DEVICES; ++i) {
+            if (pev->data[1] == DEVICE_NOTES[i][0]) {
+                midiData[i] += String((unsigned long)timeInMs) + ",0;";
+            } else if (pev->data[1] == DEVICE_NOTES[i][1]) {
+                midiData[i] += String((unsigned long)timeInMs) + ",1;";
+            }
+        }
     }
 
     // test_struct test;
@@ -218,15 +227,17 @@ void setup() {
     TFT_SPI.begin(TFT_CLK_PIN, TFT_MISO_PIN, TFT_MOSI_PIN, TFT_CS_PIN);
 
     // Init ST7789 1.14" 135x240 TFT
-    tft.init(135, 240); // width, height
+    tft.init(135, 240);                      // width, height
     tft.setSPISpeed(26ul * 1000ul * 1000ul); // 26 MHz
-
-    tft.setCursor(0, 0);
+    tft.setRotation(1);
+    tft.setTextSize(2);
     tft.setTextWrap(true);
-    tft.setTextColor(ST77XX_WHITE);
-    tft.fillScreen(ST77XX_WHITE);
-    delay(1000);
+    tft.setTextColor(ST77XX_GREEN);
     tft.fillScreen(ST77XX_BLACK);
+
+    // Clear midi data string buffer
+    for (int i = 0; i < NUMBER_OF_DEVICES; ++i)
+        midiData[i] = "";
 
     // Initialize MIDIFile
     SMF.begin(&SD);
@@ -249,6 +260,10 @@ void setup() {
     } else {
         Serial.println("Error loading midi file!");
     }
+
+    // Test print processed midi data
+    tft.setCursor(0, 0);
+    tft.println(midiData[1]);
 
     // Sync slaves on boot
     // TODO: sync slaves on start button and in a continues fasion
@@ -286,5 +301,13 @@ void loop() {
     // delay(1000);
 
     digitalWrite(START_LED_PIN, digitalRead(SETUP_BUTTON_PIN));
+
+    static int start = 1;
+
+    if (digitalRead(START_BUTTON_PIN) != start) {
+        start = digitalRead(START_BUTTON_PIN);
+        tft.fillScreen(start ? ST77XX_BLACK : ST77XX_RED);
+    }
+
     delay(20);
 }
