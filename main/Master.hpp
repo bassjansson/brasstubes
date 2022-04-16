@@ -12,18 +12,39 @@
 #include <SPI.h>
 #include <SdFat.h>
 
+#include <Adafruit_GFX.h>
+#include <Adafruit_ST7789.h>
+
 // SD SPI pins
 #define FSPI_CLK 12
 #define FSPI_MISO 13
 #define FSPI_MOSI 11
-#define FSPI_CS0 10
+#define FSPI_CS0 8
 #define FSPI_SCK SD_SCK_MHZ(20)
 
-AsyncWebServer server(80);
+// TFT SPI pins
+#define TFT_MISO_PIN 4
+#define TFT_MOSI_PIN 35
+#define TFT_CLK_PIN 36
+#define TFT_CS_PIN 34
+#define TFT_RST_PIN 38
+#define TFT_DC_PIN 37
+#define TFT_BKLT_PIN 33
+#define TFT_PWR_PIN 14
+
+// Button pins
+#define START_LED_PIN 2
+#define START_BUTTON_PIN 1
+#define SETUP_BUTTON_PIN 3
 
 SPIClass FSPI_SPI(FSPI);
+SPIClass TFT_SPI(HSPI);
+
 SdFat SD;
 MD_MIDIFile SMF;
+Adafruit_ST7789 tft = Adafruit_ST7789(&TFT_SPI, TFT_CS_PIN, TFT_DC_PIN, TFT_RST_PIN);
+
+AsyncWebServer server(80);
 
 uint64_t currentTicks;
 double msPerTick;
@@ -49,10 +70,10 @@ static void onMidiDataGetRequest(AsyncWebServerRequest *request) {
 // This callback is set up in the setup() function.
 void midiCallback(midi_event *pev) {
     if (pev->data[0] == CMD_NOTE_ON) {
-        Serial.print((uint64_t)(currentTicks * msPerTick + 0.6));
-        Serial.print("\t-\t");
-        Serial.print(pev->data[1]);
-        Serial.println();
+        tft.print((uint64_t)(currentTicks * msPerTick + 0.6));
+        tft.print("\t-\t");
+        tft.print(pev->data[1]);
+        tft.println();
     }
 
     // test_struct test;
@@ -109,6 +130,17 @@ void onDataReceived(const uint8_t *mac, const uint8_t *incomingData, int len) {
 }
 
 void setup() {
+    // Setup start button LED
+    pinMode(START_LED_PIN, OUTPUT);
+    digitalWrite(START_LED_PIN, HIGH);
+
+    // Setup button pins
+    pinMode(START_BUTTON_PIN, INPUT_PULLUP);
+    pinMode(SETUP_BUTTON_PIN, INPUT_PULLUP);
+
+    digitalWrite(START_BUTTON_PIN, HIGH);
+    digitalWrite(SETUP_BUTTON_PIN, HIGH);
+
     // Init Serial
     Serial.begin(115200);
     Serial.println();
@@ -123,7 +155,7 @@ void setup() {
     Serial.print(" Default MAC Address:  ");
     Serial.println(WiFi.macAddress());
     Serial.print("Changing MAC Address:  ");
-    Serial.println(esp_err_to_name(esp_wifi_set_mac(WIFI_IF_STA, &DEVICE_MAC_ADDRESSES[DEVICE_NUMBER][0])));
+    Serial.println(esp_err_to_name(esp_wifi_set_mac(WIFI_IF_AP, &DEVICE_MAC_ADDRESSES[DEVICE_NUMBER][0])));
     Serial.print("  Forced MAC Address:  ");
     Serial.println(WiFi.macAddress());
 
@@ -174,13 +206,35 @@ void setup() {
             ;
     }
 
+    // Turn on peripherals power
+    pinMode(TFT_PWR_PIN, OUTPUT);
+    digitalWrite(TFT_PWR_PIN, HIGH);
+
+    // Turn on backlight
+    pinMode(TFT_BKLT_PIN, OUTPUT);
+    digitalWrite(TFT_BKLT_PIN, HIGH);
+
+    // Init SPI for TFT screen
+    TFT_SPI.begin(TFT_CLK_PIN, TFT_MISO_PIN, TFT_MOSI_PIN, TFT_CS_PIN);
+
+    // Init ST7789 1.14" 135x240 TFT
+    tft.init(135, 240); // width, height
+    tft.setSPISpeed(26ul * 1000ul * 1000ul); // 26 MHz
+
+    tft.setCursor(0, 0);
+    tft.setTextWrap(true);
+    tft.setTextColor(ST77XX_WHITE);
+    tft.fillScreen(ST77XX_WHITE);
+    delay(1000);
+    tft.fillScreen(ST77XX_BLACK);
+
     // Initialize MIDIFile
     SMF.begin(&SD);
     SMF.setMidiHandler(midiCallback);
     SMF.setSysexHandler(sysexCallback);
 
     // Process entire MIDI file
-    if (SMF.load(midiFileName) == SMF.E_OK) {
+    if (SMF.load(MIDI_FILE_NAME) == SMF.E_OK) {
         msPerTick = 1000.0 / ((double)SMF.getTempo() / 60.0 * SMF.getTicksPerQuarterNote());
         currentTicks = 0;
 
@@ -230,4 +284,7 @@ void loop() {
     // }
     //
     // delay(1000);
+
+    digitalWrite(START_LED_PIN, digitalRead(SETUP_BUTTON_PIN));
+    delay(20);
 }
