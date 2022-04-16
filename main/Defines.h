@@ -1,6 +1,13 @@
 #ifndef __DEFINES_H__
 #define __DEFINES_H__
 
+const char *WIFI_SSID = "BrassTubesAP";
+const char *WIFI_PASS = "123456789";
+
+const char *MIDI_FILE_NAME = "MIDITEST.MID";
+
+#define CMD_NOTE_ON 0x90
+
 #define TOF_DELAY 100 // ms
 
 #define NUMBER_OF_DEVICES 4

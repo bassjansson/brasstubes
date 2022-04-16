@@ -1,5 +1,6 @@
 #pragma once
 
+#include <HTTPClient.h>
 #include <WiFi.h>
 #include <esp_now.h>
 #include <esp_wifi.h>
@@ -9,23 +10,24 @@
 
 #define SYNC_LED_PIN 22
 
+#define MSWITCH_A_PIN 17 // Motor A micro switch
+#define MSWITCH_B_PIN 16 // Motor A micro switch
+
 #define MOTOR_A1_PIN 26 // Motor Forward pin
 #define MOTOR_A2_PIN 18 // Motor Reverse pin
 
 #define MOTOR_B1_PIN 19 // Motor Forward pin
 #define MOTOR_B2_PIN 23 // Motor Reverse pin
 
-#define ENCODER_A1_PIN 33 // Encoder Output 'A' must connected with interupt pin of arduino
-#define ENCODER_A2_PIN 21 // Encoder Output 'B' must connected with interupt pin of arduino
+#define ENCODER_A1_PIN 27 // Encoder Output 'A' must connected with interupt pin of arduino
+#define ENCODER_A2_PIN 25 // Encoder Output 'B' must connected with interupt pin of arduino
 
-#define ENCODER_B1_PIN 16 // Encoder Output 'A' must connected with interupt pin of arduino
-#define ENCODER_B2_PIN 17 // Encoder Output 'B' must connected with interupt pin of arduino
+#define ENCODER_B1_PIN 32 // Encoder Output 'A' must connected with interupt pin of arduino
+#define ENCODER_B2_PIN 4  // Encoder Output 'B' must connected with interupt pin of arduino
 
 #define ENCODER_STEPS_PER_REV 28
 #define GEAR_RATIO_MOTOR_A 298
-#define GEAR_RATIO_MOTOR_B 50
-
-#define CMD_NOTE_ON 144
+#define GEAR_RATIO_MOTOR_B 298
 
 volatile int lastEncodedA = 0;   // Here updated value of encoder store.
 volatile long encoderValueA = 0; // Raw encoder value
@@ -34,6 +36,30 @@ volatile int lastEncodedB = 0;   // Here updated value of encoder store.
 volatile long encoderValueB = 0; // Raw encoder value
 
 unsigned long syncTime = 0;
+
+WiFiClient client;
+HTTPClient http;
+
+void httpGETRequest(const char *url, String& payload) {
+    // Your Domain name with URL path or IP address with path
+    http.begin(client, url);
+
+    // Send HTTP GET request
+    int httpResponseCode = http.GET();
+
+    if (httpResponseCode == 200) {
+        Serial.print("HTTP Response code: ");
+        Serial.println(httpResponseCode);
+        payload = http.getString();
+    } else {
+        Serial.print("Error code: ");
+        Serial.println(httpResponseCode);
+        payload = "";
+    }
+
+    // Free resources
+    http.end();
+}
 
 void IRAM_ATTR updateEncoderA() {
     int MSB = digitalRead(ENCODER_A1_PIN); // MSB = most significant bit
@@ -143,6 +169,14 @@ void setup() {
     pinMode(SYNC_LED_PIN, OUTPUT);
     digitalWrite(SYNC_LED_PIN, LOW);
 
+    // Setup micro switch pins
+    pinMode(MSWITCH_A_PIN, INPUT_PULLUP);
+    pinMode(MSWITCH_B_PIN, INPUT_PULLUP);
+
+    // turn pullup resistors on
+    digitalWrite(MSWITCH_A_PIN, HIGH);
+    digitalWrite(MSWITCH_A_PIN, HIGH);
+
     // Setup motor pins
     pinMode(MOTOR_A1_PIN, OUTPUT);
     pinMode(MOTOR_A2_PIN, OUTPUT);
@@ -197,6 +231,17 @@ void setup() {
     Serial.print("  Forced MAC Address:  ");
     Serial.println(WiFi.macAddress());
 
+    // Connect to master device with WiFi
+    Serial.println("Connecting...");
+    WiFi.begin(WIFI_SSID, WIFI_PASS);
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        Serial.print(".");
+    }
+    Serial.println();
+    Serial.print("Connected to WiFi network with IP Address: ");
+    Serial.println(WiFi.localIP());
+
     // Init ESP-NOW
     if (esp_now_init() != ESP_OK) {
         Serial.println("Error initializing ESP-NOW.");
@@ -216,6 +261,29 @@ void setup() {
     if (esp_now_add_peer(&peerInfo) != ESP_OK) {
         Serial.println("Failed to add the master as a peer.");
         return;
+    }
+
+    // Send GET request to get MIDI data from master server
+    if (WiFi.status() == WL_CONNECTED) {
+        String url = "http://192.168.4.1/mididata?slave=";
+        url += DEVICE_NUMBER;
+        Serial.println(url);
+
+        String midiData;
+        httpGETRequest(url.c_str(), midiData);
+
+        Serial.print(midiData.length());
+        Serial.print(", ");
+        Serial.println(sizeof(test_struct));
+
+        if (midiData.length() == sizeof(test_struct)) {
+            test_struct *test = (test_struct *)(midiData.c_str());
+
+            Serial.print("Midi Data: ");
+            Serial.print(test->x);
+            Serial.print(", ");
+            Serial.println(test->y);
+        }
     }
 }
 

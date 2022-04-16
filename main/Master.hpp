@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ESPAsyncWebServer.h>
 #include <WiFi.h>
 #include <esp_now.h>
 #include <esp_wifi.h>
@@ -18,26 +19,36 @@
 #define FSPI_CS0 10
 #define FSPI_SCK SD_SCK_MHZ(20)
 
-const uint16_t WAIT_DELAY = 2000; // ms
-
-const char *tuneList[] = {"MIDITEST.MID"};
+AsyncWebServer server(80);
 
 SPIClass FSPI_SPI(FSPI);
 SdFat SD;
 MD_MIDIFile SMF;
-
-#define NOTE_ON_CMD 0x90
 
 uint64_t currentTicks;
 double msPerTick;
 
 // unsigned long sendTimes[NUMBER_OF_DEVICES];
 
+static void onMidiDataGetRequest(AsyncWebServerRequest *request) {
+    int deviceNumber = request->arg("slave").toInt();
+    Serial.print("Got request from slave with number: ");
+    Serial.println(deviceNumber);
+
+    // String data = "Hello World! Slave = " + String(deviceNumber);
+    // request->send_P(200, "text/plain", data.c_str());
+
+    static test_struct test;
+    test.x = deviceNumber;
+    test.y = 12345;
+    request->send_P(200, "application/octet-stream", (uint8_t *)&test, sizeof(test_struct));
+}
+
 // Called by the MIDIFile library when a file event needs to be processed
 // thru the midi communications interface.
 // This callback is set up in the setup() function.
 void midiCallback(midi_event *pev) {
-    if (pev->data[0] == NOTE_ON_CMD) {
+    if (pev->data[0] == CMD_NOTE_ON) {
         Serial.print((uint64_t)(currentTicks * msPerTick + 0.6));
         Serial.print("\t-\t");
         Serial.print(pev->data[1]);
@@ -75,26 +86,6 @@ void sysexCallback(sysex_event *pev) {
     //     DEBUGX(" ", pev->data[i]);
 }
 
-// Turn everything off on every channel.
-// Some midi files are badly behaved and leave notes hanging, so between songs turn
-// off all the notes and sound
-void midiSilence() {
-    midi_event ev;
-
-    // All sound off
-    // When All Sound Off is received all oscillators will turn off, and their volume
-    // envelopes are set to zero as soon as possible.
-    ev.size = 0;
-    ev.data[ev.size++] = 0xb0;
-    ev.data[ev.size++] = 120;
-    ev.data[ev.size++] = 0;
-
-    for (ev.channel = 0; ev.channel < 16; ev.channel++)
-        midiCallback(&ev);
-}
-
-void tickMetronome() {}
-
 void onDataSend(const uint8_t *mac_addr, esp_now_send_status_t status) {
     // Serial.print("Send to ");
     // Serial.print(macAddressToReadableString(mac_addr));
@@ -125,7 +116,7 @@ void setup() {
     Serial.println();
 
     // Init WiFi
-    WiFi.mode(WIFI_STA);
+    WiFi.mode(WIFI_AP); // WIFI_STA_AP
     WiFi.disconnect();
 
     // Set MAC address
@@ -135,6 +126,18 @@ void setup() {
     Serial.println(esp_err_to_name(esp_wifi_set_mac(WIFI_IF_STA, &DEVICE_MAC_ADDRESSES[DEVICE_NUMBER][0])));
     Serial.print("  Forced MAC Address:  ");
     Serial.println(WiFi.macAddress());
+
+    // Setting the ESP as an access point
+    Serial.print("Setting up AP...");
+    WiFi.softAP(WIFI_SSID, WIFI_PASS);
+    IPAddress IP = WiFi.softAPIP();
+    Serial.print("AP IP address: ");
+    Serial.println(IP);
+
+    // Start server
+    Serial.println("Setting up HTTP server...");
+    server.on("/mididata", HTTP_GET, onMidiDataGetRequest);
+    server.begin();
 
     // Init ESP-NOW
     if (esp_now_init() != ESP_OK) {
@@ -177,7 +180,7 @@ void setup() {
     SMF.setSysexHandler(sysexCallback);
 
     // Process entire MIDI file
-    if (SMF.load(tuneList[0]) == SMF.E_OK) {
+    if (SMF.load(midiFileName) == SMF.E_OK) {
         msPerTick = 1000.0 / ((double)SMF.getTempo() / 60.0 * SMF.getTicksPerQuarterNote());
         currentTicks = 0;
 
@@ -227,58 +230,4 @@ void loop() {
     // }
     //
     // delay(1000);
-
-    /*
-    static enum { S_IDLE, S_PLAYING, S_END, S_WAIT_BETWEEN } state = S_IDLE;
-    static uint16_t currTune = ARRAY_SIZE(tuneList);
-    static uint32_t timeStart;
-
-    switch (state) {
-    case S_IDLE: // now idle, set up the next tune
-    {
-        int err;
-        currTune++;
-        if (currTune >= ARRAY_SIZE(tuneList))
-            currTune = 0;
-
-        // use the next file name and play it
-        Serial.print("File: ");
-        Serial.println(tuneList[currTune]);
-        err = SMF.load(tuneList[currTune]);
-        SMF.restart();
-        if (err != MD_MIDIFile::E_OK) {
-            Serial.print(" - SMF load Error ");
-            Serial.println(err);
-            timeStart = millis();
-            state = S_WAIT_BETWEEN;
-        } else {
-            state = S_PLAYING;
-        }
-    } break;
-
-    case S_PLAYING: // play the file
-        if (!SMF.isEOF()) {
-            if (SMF.getNextEvent())
-                tickMetronome();
-        } else
-            state = S_END;
-        break;
-
-    case S_END: // done with this one
-        SMF.close();
-        midiSilence();
-        timeStart = millis();
-        state = S_WAIT_BETWEEN;
-        break;
-
-    case S_WAIT_BETWEEN: // signal finished with a dignified pause
-        if (millis() - timeStart >= WAIT_DELAY)
-            state = S_IDLE;
-        break;
-
-    default:
-        state = S_IDLE;
-        break;
-    }
-    */
 }
