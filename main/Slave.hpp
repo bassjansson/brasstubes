@@ -4,6 +4,7 @@
 #include <WiFi.h>
 #include <esp_now.h>
 #include <esp_wifi.h>
+#include <vector>
 
 #include "Defines.h"
 #include "Utils.h"
@@ -26,21 +27,25 @@
 #define ENCODER_B2_PIN 4  // Encoder Output 'B' must connected with interupt pin of arduino
 
 #define ENCODER_STEPS_PER_REV 28
-#define GEAR_RATIO_MOTOR_A 298
+#define GEAR_RATIO_MOTOR_A 50
 #define GEAR_RATIO_MOTOR_B 298
 
 volatile int lastEncodedA = 0;   // Here updated value of encoder store.
 volatile long encoderValueA = 0; // Raw encoder value
+volatile long targetMotorA = 0;  // Target value to stop at
 
 volatile int lastEncodedB = 0;   // Here updated value of encoder store.
 volatile long encoderValueB = 0; // Raw encoder value
+volatile long targetMotorB = 0;  // Target value to stop at
 
 unsigned long syncTime = 0;
+
+std::vector<MotorEvent> motorEvents;
 
 WiFiClient client;
 HTTPClient http;
 
-void httpGETRequest(const char *url, String& payload) {
+void httpGETRequest(const char *url, String &payload) {
     // Your Domain name with URL path or IP address with path
     http.begin(client, url);
 
@@ -74,6 +79,12 @@ void IRAM_ATTR updateEncoderA() {
         encoderValueA++;
 
     lastEncodedA = encoded; // store this value for next time
+
+    // Stop at target value
+    if (encoderValueA >= targetMotorA) {
+        digitalWrite(MOTOR_A1_PIN, LOW);
+        digitalWrite(MOTOR_A2_PIN, LOW);
+    }
 }
 
 void IRAM_ATTR updateEncoderB() {
@@ -89,34 +100,29 @@ void IRAM_ATTR updateEncoderB() {
         encoderValueB++;
 
     lastEncodedB = encoded; // store this value for next time
+
+    // Stop at target value
+    if (encoderValueB >= targetMotorB) {
+        digitalWrite(MOTOR_B1_PIN, LOW);
+        digitalWrite(MOTOR_B2_PIN, LOW);
+    }
 }
 
-void rotateQuarterMotorA() {
-    static int eva = 0;
-    eva += GEAR_RATIO_MOTOR_A * ENCODER_STEPS_PER_REV / 4;
+void rotateMotorQuarter(int motor) {
+    if (motor <= 0) {
+        targetMotorA += GEAR_RATIO_MOTOR_A * ENCODER_STEPS_PER_REV / 4;
 
-    digitalWrite(MOTOR_A1_PIN, LOW);
-    digitalWrite(MOTOR_A2_PIN, HIGH);
+        digitalWrite(MOTOR_A1_PIN, LOW);
+        digitalWrite(MOTOR_A2_PIN, HIGH);
+    } else {
+        targetMotorB += GEAR_RATIO_MOTOR_B * ENCODER_STEPS_PER_REV / 4;
 
-    while (encoderValueA < eva)
-        delay(1);
+        digitalWrite(MOTOR_B1_PIN, LOW);
+        digitalWrite(MOTOR_B2_PIN, HIGH);
+    }
 
-    digitalWrite(MOTOR_A1_PIN, LOW);
-    digitalWrite(MOTOR_A2_PIN, LOW);
-}
-
-void rotateQuarterMotorB() {
-    static int evb = 0;
-    evb += GEAR_RATIO_MOTOR_B * ENCODER_STEPS_PER_REV / 4;
-
-    digitalWrite(MOTOR_B1_PIN, LOW);
-    digitalWrite(MOTOR_B2_PIN, HIGH);
-
-    while (encoderValueB < evb)
-        delay(1);
-
-    digitalWrite(MOTOR_B1_PIN, LOW);
-    digitalWrite(MOTOR_B2_PIN, LOW);
+    Serial.print("Motor turned: ");
+    Serial.println(motor ? 'B' : 'A');
 }
 
 void onDataSend(const uint8_t *mac_addr, esp_now_send_status_t status) {
@@ -162,6 +168,56 @@ void onDataReceived(const uint8_t *mac, const uint8_t *incomingData, int len) {
     Serial.println(myData.y);
     Serial.println();
     */
+}
+
+void clearMidiData() { motorEvents.clear(); }
+
+void parseMidiData(String &midiData) {
+    MotorEvent e;
+    char c;
+    String s = "";
+
+    for (int i = 0; i < midiData.length(); ++i) {
+        c = midiData[i];
+
+        if (c == ',') {
+            e.time = s.toInt();
+            s = "";
+        } else if (c == ';') {
+            e.motor = s.toInt() > 0;
+            s = "";
+
+            motorEvents.push_back(e);
+            e.time = 0;
+            e.motor = 0;
+        } else {
+            s += c;
+        }
+    }
+
+    Serial.println();
+    Serial.println(motorEvents.size());
+    Serial.println();
+    for (int i = 0; i < motorEvents.size(); ++i) {
+        Serial.print(motorEvents[i].time);
+        Serial.print(',');
+        Serial.print(motorEvents[i].motor);
+        Serial.println(';');
+    }
+}
+
+void playMidiData() {
+    unsigned long startTime = millis();
+    unsigned long eventPos = 0;
+
+    while (eventPos < motorEvents.size()) {
+        if (motorEvents[eventPos].time <= (millis() - startTime)) {
+            rotateMotorQuarter(motorEvents[eventPos].motor);
+            eventPos++;
+        } else {
+            delay(1);
+        }
+    }
 }
 
 void setup() {
@@ -272,18 +328,12 @@ void setup() {
         String midiData;
         httpGETRequest(url.c_str(), midiData);
 
-        Serial.print(midiData.length());
-        Serial.print(", ");
-        Serial.println(sizeof(test_struct));
+        Serial.print("MIDI data length: ");
+        Serial.println(midiData);
 
-        if (midiData.length() == sizeof(test_struct)) {
-            test_struct *test = (test_struct *)(midiData.c_str());
-
-            Serial.print("Midi Data: ");
-            Serial.print(test->x);
-            Serial.print(", ");
-            Serial.println(test->y);
-        }
+        clearMidiData();
+        parseMidiData(midiData);
+        playMidiData();
     }
 }
 

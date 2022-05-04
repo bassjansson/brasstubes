@@ -1,6 +1,8 @@
 #ifndef __DEFINES_H__
 #define __DEFINES_H__
 
+#include <stdlib.h>
+
 const char *WIFI_SSID = "BrassTubesAP";
 const char *WIFI_PASS = "123456789";
 
@@ -40,6 +42,11 @@ const unsigned long DEVICE_SYNC_TIMES[NUMBER_OF_DEVICES] = {
 struct test_struct {
     int x;
     unsigned long y;
+};
+
+struct MotorEvent {
+    uint32_t time;
+    uint8_t motor;
 };
 
 #endif /* __DEFINES_H__ */
