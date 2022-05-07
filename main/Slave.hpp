@@ -14,17 +14,17 @@
 #define MSWITCH_A_PIN 17 // Motor A micro switch
 #define MSWITCH_B_PIN 16 // Motor A micro switch
 
-#define MOTOR_A1_PIN 26 // Motor Forward pin
-#define MOTOR_A2_PIN 18 // Motor Reverse pin
+#define MOTOR_A1_PIN 23 // Motor Forward pin
+#define MOTOR_A2_PIN 19 // Motor Reverse pin
 
-#define MOTOR_B1_PIN 19 // Motor Forward pin
-#define MOTOR_B2_PIN 23 // Motor Reverse pin
+#define MOTOR_B1_PIN 18 // Motor Forward pin
+#define MOTOR_B2_PIN 26 // Motor Reverse pin
 
-#define ENCODER_A1_PIN 27 // Encoder Output 'A' must connected with interupt pin of arduino
-#define ENCODER_A2_PIN 25 // Encoder Output 'B' must connected with interupt pin of arduino
+#define ENCODER_A1_PIN 25 // Encoder Output 'A' must connected with interupt pin of arduino
+#define ENCODER_A2_PIN 27 // Encoder Output 'B' must connected with interupt pin of arduino
 
-#define ENCODER_B1_PIN 32 // Encoder Output 'A' must connected with interupt pin of arduino
-#define ENCODER_B2_PIN 4  // Encoder Output 'B' must connected with interupt pin of arduino
+#define ENCODER_B1_PIN 4  // Encoder Output 'A' must connected with interupt pin of arduino
+#define ENCODER_B2_PIN 32 // Encoder Output 'B' must connected with interupt pin of arduino
 
 #define ENCODER_STEPS_PER_REV 28
 #define GEAR_RATIO_MOTOR_A 50
