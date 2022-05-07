@@ -51,8 +51,6 @@ double msPerTick;
 
 String midiData[NUMBER_OF_DEVICES];
 
-// unsigned long sendTimes[NUMBER_OF_DEVICES];
-
 static void onMidiDataGetRequest(AsyncWebServerRequest *request) {
     int deviceNumber = request->arg("slave").toInt();
     Serial.print("Got request from slave with number: ");
@@ -62,11 +60,6 @@ static void onMidiDataGetRequest(AsyncWebServerRequest *request) {
         request->send_P(200, "text/plain", midiData[deviceNumber].c_str());
     else
         request->send_P(500, "text/plain", "No processed MIDI data present yet.");
-
-    // static test_struct test;
-    // test.x = deviceNumber;
-    // test.y = 12345;
-    // request->send_P(200, "application/octet-stream", (uint8_t *)&test, sizeof(test_struct));
 }
 
 // Called by the MIDIFile library when a file event needs to be processed
@@ -84,25 +77,6 @@ void midiCallback(midi_event *pev) {
             }
         }
     }
-
-    // test_struct test;
-    // test.x = pev->data[0];
-    // test.y = pev->data[1];
-
-    // for (int i = 1; i < NUMBER_OF_DEVICES; ++i)
-    //     esp_now_send(DEVICE_MAC_ADDRESSES[i], (uint8_t *)&test, sizeof(test_struct));
-
-    // if ((pev->data[0] >= 0x80) && (pev->data[0] <= 0xe0)) {
-    //     Serial.write(pev->data[0] | pev->channel);
-    //     Serial.write(&pev->data[1], pev->size - 1);
-    // } else
-    //     Serial.write(pev->data, pev->size);
-    // DEBUG("\n", millis());
-    // DEBUG("\tM T", pev->track);
-    // DEBUG(":  Ch ", pev->channel + 1);
-    // DEBUGS(" Data");
-    // for (uint8_t i = 0; i < pev->size; i++)
-    //     DEBUGX(" ", pev->data[i]);
 }
 
 // Called by the MIDIFile library when a system Exclusive (sysex) file event needs
@@ -123,19 +97,30 @@ void onDataSend(const uint8_t *mac_addr, esp_now_send_status_t status) {
 }
 
 void onDataReceived(const uint8_t *mac, const uint8_t *incomingData, int len) {
-    // unsigned long recvTime = micros();
-    //
-    // int i = getDeviceNumberFromMacAddress(mac);
-    // if (i < 0)
-    //     return;
-    //
-    // double timeOfFlight = (recvTime - sendTimes[i]) / 1000.0 - TOF_DELAY;
-    //
-    // Serial.print("Slave ");
-    // Serial.print(getDeviceNumberFromMacAddress(mac));
-    // Serial.print(" TOF:  ");
-    // Serial.print(timeOfFlight);
-    // Serial.println(" ms");
+    // TODO: process confirm events here...
+
+    int deviceNumber = getDeviceNumberFromMacAddress(mac);
+
+    if (deviceNumber < 1)
+        return;
+}
+
+void startPlaybackOnAllSlaves() {
+    unsigned long startTime = millis();
+    unsigned long nextTime;
+    EspNowEvent event;
+
+    for (int i = 1; i < NUMBER_OF_DEVICES; ++i) {
+        nextTime = startTime + DEVICE_SYNC_TIMES[i];
+
+        event.cmd = ESP_NOW_EVENT_START_SYNC;
+        event.value = START_PLAYBACK_DELAY - DEVICE_SYNC_TIMES[i];
+
+        while (nextTime > millis())
+            delay(1);
+
+        esp_now_send(DEVICE_MAC_ADDRESSES[i], (uint8_t *)&event, sizeof(event));
+    }
 }
 
 void setup() {
@@ -264,42 +249,9 @@ void setup() {
     // Test print processed midi data
     tft.setCursor(0, 0);
     tft.println(midiData[1]);
-
-    // Sync slaves on boot
-    // TODO: sync slaves on start button and in a continues fasion
-    /*
-    unsigned long startTime = millis();
-
-    for (int i = 1; i < NUMBER_OF_DEVICES; ++i) {
-        unsigned long nextTime = startTime + DEVICE_SYNC_TIMES[i];
-
-        while (nextTime > millis())
-            delay(1);
-
-        test_struct test;
-        test.x = 1;
-        test.y = DEVICE_SYNC_TIMES[i];
-
-        esp_now_send(DEVICE_MAC_ADDRESSES[i], (uint8_t *)&test, sizeof(test_struct));
-    }
-    */
 }
 
 void loop() {
-    // Serial.println();
-    //
-    // test_struct test;
-    // test.x = random(0, 20);
-    // test.y = random(0, 20);
-    //
-    // for (int i = 1; i < NUMBER_OF_DEVICES; ++i) {
-    //     sendTimes[i] = micros();
-    //     esp_now_send(DEVICE_MAC_ADDRESSES[i], (uint8_t *)&test, sizeof(test_struct));
-    //     delay(15);
-    // }
-    //
-    // delay(1000);
-
     digitalWrite(START_LED_PIN, digitalRead(SETUP_BUTTON_PIN));
 
     static int start = 1;

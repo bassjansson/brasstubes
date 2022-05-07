@@ -10,8 +10,6 @@ const char *MIDI_FILE_NAME = "MIDITEST.MID";
 
 #define CMD_NOTE_ON 0x90
 
-#define TOF_DELAY 100 // ms
-
 #define START_PLAYBACK_DELAY 5000 // ms
 
 #define NUMBER_OF_DEVICES 6 // 1 master + 5 slaves
@@ -57,7 +55,7 @@ enum EspNowEventCmd {
 
     ESP_NOW_EVENT_START_SYNC,
     ESP_NOW_EVENT_START_CONFIRM,
-    
+
     ESP_NOW_EVENT_RESET,
     ESP_NOW_EVENT_RESET_CONFIRM,
 };
