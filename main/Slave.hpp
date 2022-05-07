@@ -27,7 +27,7 @@
 #define ENCODER_B2_PIN 32 // Encoder Output 'B' must connected with interupt pin of arduino
 
 #define ENCODER_STEPS_PER_REV 28
-#define GEAR_RATIO_MOTOR_A 50
+#define GEAR_RATIO_MOTOR_A 298
 #define GEAR_RATIO_MOTOR_B 298
 
 volatile int lastEncodedA = 0;   // Here updated value of encoder store.
@@ -42,6 +42,8 @@ std::vector<MotorEvent> motorEvents;
 
 unsigned long motorEventsStartTime = 0;
 unsigned long motorEventsPos = 0;
+
+bool restartFlag = false;
 
 WiFiClient client;
 HTTPClient http;
@@ -127,9 +129,9 @@ void rotateMotorQuarter(int motor) {
 }
 
 void onDataSend(const uint8_t *mac_addr, esp_now_send_status_t status) {
-    // Serial.print("Send to ");
-    // Serial.print(macAddressToReadableString(mac_addr));
-    // Serial.println(status == ESP_NOW_SEND_SUCCESS ? " succeeded." : " failed.");
+    Serial.print("Send to ");
+    Serial.print(macAddressToReadableString(mac_addr));
+    Serial.println(status == ESP_NOW_SEND_SUCCESS ? " succeeded." : " failed.");
 }
 
 void onDataReceived(const uint8_t *mac, const uint8_t *incomingData, int len) {
@@ -159,7 +161,7 @@ void onDataReceived(const uint8_t *mac, const uint8_t *incomingData, int len) {
             esp_now_send(DEVICE_MAC_ADDRESSES[0], (uint8_t *)&event, sizeof(event));
         }
     } else if (event.cmd == ESP_NOW_EVENT_RESET) {
-        bool restart = event.value > 0;
+        restartFlag = event.value > 0;
 
         motorEventsStartTime = 0;
         motorEventsPos = motorEvents.size();
@@ -171,11 +173,6 @@ void onDataReceived(const uint8_t *mac, const uint8_t *incomingData, int len) {
         event.cmd = ESP_NOW_EVENT_RESET_CONFIRM;
         event.value = 1;
         esp_now_send(DEVICE_MAC_ADDRESSES[0], (uint8_t *)&event, sizeof(event));
-
-        if (restart) {
-            delay(200);
-            ESP.restart();
-        }
     }
 }
 
@@ -351,5 +348,10 @@ void loop() {
         }
     } else {
         delay(20);
+    }
+
+    if (restartFlag) {
+        delay(100);
+        ESP.restart();
     }
 }
