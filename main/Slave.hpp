@@ -308,19 +308,17 @@ void setup() {
     // Connect to master device with WiFi
     Serial.println("Connecting...");
     WiFi.begin(WIFI_SSID, WIFI_PASS);
-    while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
-        Serial.print(".");
-    }
-    Serial.println();
-    Serial.print("Connected to WiFi network with IP Address: ");
-    Serial.println(WiFi.localIP());
 
     // Make sure motor events is empty
     motorEvents.clear();
+}
 
+void loop() {
     // Send GET request to get MIDI data from master server
-    if (WiFi.status() == WL_CONNECTED) {
+    if (motorEvents.size() == 0 && WiFi.status() == WL_CONNECTED) {
+        Serial.print("Connected to WiFi network with IP Address: ");
+        Serial.println(WiFi.localIP());
+
         String url = "http://192.168.4.1/mididata?slave=";
         url += DEVICE_NUMBER;
         Serial.println(url);
@@ -332,26 +330,27 @@ void setup() {
         Serial.println(midiData.length());
 
         parseMidiData(midiData);
-    } else {
-        // Something went wrong, restart
-        ESP.restart();
-    }
-}
 
-void loop() {
+        WiFi.disconnect();
+        Serial.print("Disconnected from WiFi.");
+    }
+
+    // Schedule motor events
     if (motorEventsPos < motorEvents.size() && millis() >= motorEventsStartTime) {
         if (motorEvents[motorEventsPos].time <= (millis() - motorEventsStartTime)) {
             rotateMotorQuarter(motorEvents[motorEventsPos].motor);
             motorEventsPos++;
         } else {
+            digitalWrite(SYNC_LED_PIN, (millis() - motorEventsStartTime) % 4000ul < 100);
             delay(1);
         }
     } else {
         delay(20);
     }
 
+    // Restart if requested
     if (restartFlag) {
-        delay(100);
+        delay(500);
         ESP.restart();
     }
 }
