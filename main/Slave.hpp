@@ -136,16 +136,6 @@ void onDataReceived(const uint8_t *mac, const uint8_t *incomingData, int len) {
     unsigned long receiveTime = millis();
 
     EspNowEvent event;
-
-    if (motorEvents.size() < 1) {
-        event.cmd = ESP_NOW_EVENT_NO_MIDI_DATA;
-        event.value = 1;
-        esp_now_send(DEVICE_MAC_ADDRESSES[0], (uint8_t *)&event, sizeof(event));
-
-        delay(100);
-        ESP.restart();
-    }
-
     memcpy(&event, incomingData, sizeof(event));
 
     if (event.cmd == ESP_NOW_EVENT_CHECK_DATA) {
@@ -153,12 +143,21 @@ void onDataReceived(const uint8_t *mac, const uint8_t *incomingData, int len) {
         event.value = motorEvents.size();
         esp_now_send(DEVICE_MAC_ADDRESSES[0], (uint8_t *)&event, sizeof(event));
     } else if (event.cmd == ESP_NOW_EVENT_START_SYNC) {
-        motorEventsStartTime = receiveTime + event.value;
-        motorEventsPos = 0;
+        if (motorEvents.size() < 1) {
+            motorEventsStartTime = 0;
+            motorEventsPos = 0;
 
-        event.cmd = ESP_NOW_EVENT_START_CONFIRM;
-        event.value = 1;
-        esp_now_send(DEVICE_MAC_ADDRESSES[0], (uint8_t *)&event, sizeof(event));
+            event.cmd = ESP_NOW_EVENT_NO_MIDI_DATA;
+            event.value = 1;
+            esp_now_send(DEVICE_MAC_ADDRESSES[0], (uint8_t *)&event, sizeof(event));
+        } else {
+            motorEventsStartTime = receiveTime + event.value;
+            motorEventsPos = 0;
+
+            event.cmd = ESP_NOW_EVENT_START_CONFIRM;
+            event.value = 1;
+            esp_now_send(DEVICE_MAC_ADDRESSES[0], (uint8_t *)&event, sizeof(event));
+        }
     } else if (event.cmd == ESP_NOW_EVENT_RESET) {
         bool restart = event.value > 0;
 
@@ -174,7 +173,7 @@ void onDataReceived(const uint8_t *mac, const uint8_t *incomingData, int len) {
         esp_now_send(DEVICE_MAC_ADDRESSES[0], (uint8_t *)&event, sizeof(event));
 
         if (restart) {
-            delay(100);
+            delay(200);
             ESP.restart();
         }
     }
@@ -288,17 +287,6 @@ void setup() {
     Serial.print("  Forced MAC Address:  ");
     Serial.println(WiFi.macAddress());
 
-    // Connect to master device with WiFi
-    Serial.println("Connecting...");
-    WiFi.begin(WIFI_SSID, WIFI_PASS);
-    while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
-        Serial.print(".");
-    }
-    Serial.println();
-    Serial.print("Connected to WiFi network with IP Address: ");
-    Serial.println(WiFi.localIP());
-
     // Init ESP-NOW
     if (esp_now_init() != ESP_OK) {
         Serial.println("Error initializing ESP-NOW.");
@@ -319,6 +307,17 @@ void setup() {
         Serial.println("Failed to add the master as a peer.");
         return;
     }
+
+    // Connect to master device with WiFi
+    Serial.println("Connecting...");
+    WiFi.begin(WIFI_SSID, WIFI_PASS);
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        Serial.print(".");
+    }
+    Serial.println();
+    Serial.print("Connected to WiFi network with IP Address: ");
+    Serial.println(WiFi.localIP());
 
     // Make sure motor events is empty
     motorEvents.clear();
