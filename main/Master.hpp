@@ -51,6 +51,12 @@ double msPerTick;
 
 String midiData[NUMBER_OF_DEVICES];
 
+bool deviceDataChecks[NUMBER_OF_DEVICES];
+bool deviceSyncStarts[NUMBER_OF_DEVICES];
+bool deviceHardResets[NUMBER_OF_DEVICES];
+
+bool allSlavesAreChecked = false;
+
 static void onMidiDataGetRequest(AsyncWebServerRequest *request) {
     int deviceNumber = request->arg("slave").toInt();
     Serial.print("Got request from slave with number: ");
@@ -91,36 +97,192 @@ void sysexCallback(sysex_event *pev) {
 }
 
 void onDataSend(const uint8_t *mac_addr, esp_now_send_status_t status) {
-    // Serial.print("Send to ");
-    // Serial.print(macAddressToReadableString(mac_addr));
-    // Serial.println(status == ESP_NOW_SEND_SUCCESS ? " succeeded." : " failed.");
+    if (status != ESP_NOW_SEND_SUCCESS) {
+        Serial.print("Send to slave ");
+        Serial.print(getDeviceNumberFromMacAddress(mac_addr));
+        Serial.println(status == ESP_NOW_SEND_SUCCESS ? " succeeded." : " failed.");
+    }
 }
 
 void onDataReceived(const uint8_t *mac, const uint8_t *incomingData, int len) {
-    // TODO: process confirm events here...
-
     int deviceNumber = getDeviceNumberFromMacAddress(mac);
 
-    if (deviceNumber < 1)
+    if (deviceNumber < 1 || deviceNumber >= NUMBER_OF_DEVICES)
         return;
+
+    EspNowEvent event;
+    memcpy(&event, incomingData, sizeof(event));
+
+    if (event.cmd == ESP_NOW_EVENT_NO_MIDI_DATA) {
+        Serial.print("No MIDI data on slave: ");
+        Serial.println(deviceNumber);
+    } else if (event.cmd == ESP_NOW_EVENT_CHECK_CONFIRM) {
+        // Serial.print("MIDI data length: ");
+        // Serial.println(midiData[deviceNumber].length());
+        // Serial.print("Check data length: ");
+        // Serial.println(event.value);
+        deviceDataChecks[deviceNumber] = event.value > 0 ? 1 : 0;
+
+        Serial.print(deviceNumber);
+        Serial.println(": Check");
+    } else if (event.cmd == ESP_NOW_EVENT_START_CONFIRM) {
+        deviceSyncStarts[deviceNumber] = 1;
+
+        Serial.print(deviceNumber);
+        Serial.println(": Start");
+    } else if (event.cmd == ESP_NOW_EVENT_RESET_CONFIRM) {
+        deviceHardResets[deviceNumber] = 1;
+
+        Serial.print(deviceNumber);
+        Serial.println(": Reset");
+    }
 }
 
-void startPlaybackOnAllSlaves() {
+void tftClearScreen() {
+    tft.fillScreen(ST77XX_BLACK);
+    tft.setCursor(0, 0);
+}
+
+int checkValidDataOnAllSlaves() {
     unsigned long startTime = millis();
     unsigned long nextTime;
     EspNowEvent event;
 
-    for (int i = 1; i < NUMBER_OF_DEVICES; ++i) {
-        nextTime = startTime + DEVICE_SYNC_TIMES[i];
+    for (int i = 1; i < NUMBER_OF_DEVICES; ++i)
+        deviceDataChecks[i] = 0;
 
-        event.cmd = ESP_NOW_EVENT_START_SYNC;
-        event.value = START_PLAYBACK_DELAY - DEVICE_SYNC_TIMES[i];
+    for (int i = 1; i < NUMBER_OF_DEVICES; ++i) {
+        nextTime = startTime + i * DEVICE_ITERATE_DELAY;
+
+        event.cmd = ESP_NOW_EVENT_CHECK_DATA;
+        event.value = 1;
 
         while (nextTime > millis())
             delay(1);
 
         esp_now_send(DEVICE_MAC_ADDRESSES[i], (uint8_t *)&event, sizeof(event));
     }
+
+    delay(DEVICE_ITERATE_DELAY + 1000);
+
+    for (int i = 1; i < (NUMBER_OF_SLAVES_IN_USE + 1); ++i) {
+        if (deviceDataChecks[i] == 0)
+            return i;
+    }
+
+    return 0;
+}
+
+int startPlaybackOnAllSlaves() {
+    unsigned long startTime = millis();
+    unsigned long nextTime;
+    EspNowEvent event;
+
+    for (int i = 1; i < NUMBER_OF_DEVICES; ++i)
+        deviceSyncStarts[i] = 0;
+
+    for (int i = 1; i < NUMBER_OF_DEVICES; ++i) {
+        nextTime = startTime + i * DEVICE_ITERATE_DELAY;
+
+        event.cmd = ESP_NOW_EVENT_START_SYNC;
+        event.value = START_PLAYBACK_DELAY - i * DEVICE_ITERATE_DELAY;
+
+        while (nextTime > millis())
+            delay(1);
+
+        esp_now_send(DEVICE_MAC_ADDRESSES[i], (uint8_t *)&event, sizeof(event));
+    }
+
+    delay(DEVICE_ITERATE_DELAY + 1000);
+
+    for (int i = 1; i < (NUMBER_OF_SLAVES_IN_USE + 1); ++i) {
+        if (deviceSyncStarts[i] == 0)
+            return i;
+    }
+
+    return 0;
+}
+
+int resetDataOnAllSlaves(bool hard = false) {
+    unsigned long startTime = millis();
+    unsigned long nextTime;
+    EspNowEvent event;
+
+    for (int i = 1; i < NUMBER_OF_DEVICES; ++i)
+        deviceHardResets[i] = 0;
+
+    for (int i = 1; i < NUMBER_OF_DEVICES; ++i) {
+        nextTime = startTime + i * DEVICE_ITERATE_DELAY;
+
+        event.cmd = ESP_NOW_EVENT_RESET;
+        event.value = hard ? 1 : 0; // 0 = soft, 1 = hard
+
+        while (nextTime > millis())
+            delay(1);
+
+        esp_now_send(DEVICE_MAC_ADDRESSES[i], (uint8_t *)&event, sizeof(event));
+    }
+
+    delay(DEVICE_ITERATE_DELAY + 1000);
+
+    if (hard)
+        delay(2000);
+
+    for (int i = 1; i < (NUMBER_OF_SLAVES_IN_USE + 1); ++i) {
+        if (deviceHardResets[i] == 0)
+            return i;
+    }
+
+    return 0;
+}
+
+void setStartButtonLed(bool on) { digitalWrite(START_LED_PIN, !on); }
+
+void onSetupButtonPressed() {
+    // Stop all slaves
+
+    tftClearScreen();
+    tft.setTextColor(ST77XX_WHITE);
+    tft.println("Stopping playback on all slaves");
+
+    tft.setTextColor(ST77XX_RED);
+    int resetted = 0;
+    while (resetted = resetDataOnAllSlaves(false)) {
+        tft.print("s");
+        tft.print(resetted);
+        tft.print(" ");
+    }
+
+    tft.setTextColor(ST77XX_RED);
+    tft.println("\nPlayback stopped!");
+}
+
+void onStartButtonPressed() {
+    // Start all slaves
+
+    tftClearScreen();
+    tft.setTextColor(ST77XX_WHITE);
+    tft.println("Starting playback on all slaves");
+
+    tft.setTextColor(ST77XX_RED);
+    int started = 0;
+    while (started = startPlaybackOnAllSlaves()) {
+        tft.print("s");
+        tft.print(started);
+        tft.print(" ");
+    }
+
+    tft.setTextColor(ST77XX_WHITE);
+    tft.println("\nSync success, final countdown:");
+    tft.setTextColor(ST77XX_YELLOW);
+    for (int i = (START_PLAYBACK_DELAY / 1000) - 1; i >= 0; --i) {
+        tft.print(i);
+        tft.print(" ");
+        delay(1000);
+    }
+
+    tft.setTextColor(ST77XX_GREEN);
+    tft.println("\n\nSTARTED!!! :D");
 }
 
 void setup() {
@@ -142,28 +304,16 @@ void setup() {
     Serial.println();
 
     // Init WiFi
-    WiFi.mode(WIFI_AP); // WIFI_STA_AP
+    WiFi.mode(WIFI_AP_STA);
     WiFi.disconnect();
 
     // Set MAC address
     Serial.print(" Default MAC Address:  ");
     Serial.println(WiFi.macAddress());
     Serial.print("Changing MAC Address:  ");
-    Serial.println(esp_err_to_name(esp_wifi_set_mac(WIFI_IF_AP, &DEVICE_MAC_ADDRESSES[DEVICE_NUMBER][0])));
+    Serial.println(esp_err_to_name(esp_wifi_set_mac(WIFI_IF_STA, &DEVICE_MAC_ADDRESSES[DEVICE_NUMBER][0])));
     Serial.print("  Forced MAC Address:  ");
     Serial.println(WiFi.macAddress());
-
-    // Setting the ESP as an access point
-    Serial.print("Setting up AP...");
-    WiFi.softAP(WIFI_SSID, WIFI_PASS);
-    IPAddress IP = WiFi.softAPIP();
-    Serial.print("AP IP address: ");
-    Serial.println(IP);
-
-    // Start server
-    Serial.println("Setting up HTTP server...");
-    server.on("/mididata", HTTP_GET, onMidiDataGetRequest);
-    server.begin();
 
     // Init ESP-NOW
     if (esp_now_init() != ESP_OK) {
@@ -190,15 +340,17 @@ void setup() {
         }
     }
 
-    // Init SPI for SD card
-    FSPI_SPI.begin(FSPI_CLK, FSPI_MISO, FSPI_MOSI, FSPI_CS0);
+    // Setting the ESP as an access point
+    Serial.println("Setting up AP...");
+    WiFi.softAP(WIFI_SSID, WIFI_PASS);
+    IPAddress IP = WiFi.softAPIP();
+    Serial.print("AP IP address: ");
+    Serial.println(IP);
 
-    // Initialize SD
-    if (!SD.begin(SdSpiConfig(FSPI_CS0, DEDICATED_SPI, FSPI_SCK, &FSPI_SPI))) {
-        Serial.println("SD init fail!");
-        while (true)
-            ;
-    }
+    // Start server
+    Serial.println("Setting up HTTP server...");
+    server.on("/mididata", HTTP_GET, onMidiDataGetRequest);
+    server.begin();
 
     // Turn on peripherals power
     pinMode(TFT_PWR_PIN, OUTPUT);
@@ -217,8 +369,24 @@ void setup() {
     tft.setRotation(1);
     tft.setTextSize(2);
     tft.setTextWrap(true);
-    tft.setTextColor(ST77XX_GREEN);
-    tft.fillScreen(ST77XX_BLACK);
+    tft.setTextColor(ST77XX_WHITE);
+    tftClearScreen();
+
+    // Init SPI for SD card
+    FSPI_SPI.begin(FSPI_CLK, FSPI_MISO, FSPI_MOSI, FSPI_CS0);
+
+    // Initialize SD
+    if (!SD.begin(SdSpiConfig(FSPI_CS0, DEDICATED_SPI, FSPI_SCK, &FSPI_SPI))) {
+        Serial.println("ERROR init SD card...");
+        Serial.println("Rebooting in 5 seconds.");
+
+        tft.setTextColor(ST77XX_RED);
+        tft.println("ERROR init SD card...");
+        tft.println("Rebooting in 5 seconds.");
+
+        delay(5000);
+        ESP.restart();
+    }
 
     // Clear midi data string buffer
     for (int i = 0; i < NUMBER_OF_DEVICES; ++i)
@@ -241,25 +409,91 @@ void setup() {
 
         SMF.close();
 
-        Serial.println("MIDI file processed!");
+        tft.setTextColor(ST77XX_GREEN);
+        tft.println("MIDI file loaded!");
     } else {
-        Serial.println("Error loading midi file!");
-    }
+        Serial.println("ERROR loading MIDI file...");
+        Serial.println("Rebooting in 5 seconds.");
 
-    // Test print processed midi data
-    tft.setCursor(0, 0);
-    tft.println(midiData[1]);
+        tft.setTextColor(ST77XX_RED);
+        tft.println("ERROR loading MIDI file...");
+        tft.println("Rebooting in 5 seconds.");
+
+        delay(5000);
+        ESP.restart();
+    }
 }
 
 void loop() {
-    digitalWrite(START_LED_PIN, digitalRead(SETUP_BUTTON_PIN));
+    if (!allSlavesAreChecked) {
+        // Resetting all slaves
+        tft.setTextColor(ST77XX_WHITE);
+        tft.print("\nResetting all slaves");
+        tft.setTextColor(ST77XX_RED);
+        int resetted = 0;
+        while (resetted = resetDataOnAllSlaves(true)) {
+            tft.print("s");
+            tft.print(resetted);
+            tft.print(" ");
+        }
 
-    static int start = 1;
+        // Wait for clients to connect
+        tftClearScreen();
+        tft.setTextColor(ST77XX_WHITE);
+        tft.print("\nWaiting for them to connect\n");
+        tft.setTextColor(ST77XX_YELLOW);
+        for (int i = 9; i >= 0; --i) {
+            tft.print(i);
+            tft.print(" ");
+            delay(1000);
+        }
 
-    if (digitalRead(START_BUTTON_PIN) != start) {
-        start = digitalRead(START_BUTTON_PIN);
-        tft.fillScreen(start ? ST77XX_BLACK : ST77XX_RED);
+        // Check them all if everything is okay
+        tftClearScreen();
+        tft.setTextColor(ST77XX_WHITE);
+        tft.println("Checking data on all slaves");
+        setStartButtonLed(false);
+        tft.setTextColor(ST77XX_RED);
+        int checked = 0;
+        while (checked = checkValidDataOnAllSlaves()) {
+            tft.print("s");
+            tft.print(checked);
+            tft.print(" ");
+        }
+        setStartButtonLed(true);
+
+        // Finished and ready!
+        tftClearScreen();
+        tft.setTextColor(ST77XX_WHITE);
+        tft.println("All data on all slaves checked!");
+        tft.setTextColor(ST77XX_GREEN);
+        tft.println("\nReady to press START\n\n:) :) :)");
+
+        allSlavesAreChecked = true;
     }
 
-    delay(20);
+    static const uint8_t BUTTON_PRESSED = LOW;
+    static const uint8_t DEBOUNCE_DELAY = 50; // ms
+
+    if (digitalRead(SETUP_BUTTON_PIN) == BUTTON_PRESSED) {
+        delay(DEBOUNCE_DELAY);
+        if (digitalRead(SETUP_BUTTON_PIN) == BUTTON_PRESSED) {
+            while (digitalRead(SETUP_BUTTON_PIN) == BUTTON_PRESSED)
+                delay(1);
+
+            onSetupButtonPressed();
+        }
+    }
+
+    if (digitalRead(START_BUTTON_PIN) == BUTTON_PRESSED) {
+        delay(DEBOUNCE_DELAY);
+        if (digitalRead(START_BUTTON_PIN) == BUTTON_PRESSED) {
+            while (digitalRead(START_BUTTON_PIN) == BUTTON_PRESSED)
+                delay(1);
+
+            onStartButtonPressed();
+        }
+    }
+
+    delay(10);
 }
