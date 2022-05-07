@@ -42,6 +42,9 @@ unsigned long syncTime = 0;
 
 std::vector<MotorEvent> motorEvents;
 
+unsigned long motorEventsStartTime = 0;
+unsigned long motorEventsPos = 0;
+
 WiFiClient client;
 HTTPClient http;
 
@@ -170,12 +173,12 @@ void onDataReceived(const uint8_t *mac, const uint8_t *incomingData, int len) {
     */
 }
 
-void clearMidiData() { motorEvents.clear(); }
-
 void parseMidiData(String &midiData) {
     MotorEvent e;
     char c;
     String s = "";
+
+    motorEvents.clear();
 
     for (int i = 0; i < midiData.length(); ++i) {
         c = midiData[i];
@@ -188,6 +191,8 @@ void parseMidiData(String &midiData) {
             s = "";
 
             motorEvents.push_back(e);
+            motorEventsPos = motorEvents.size();
+
             e.time = 0;
             e.motor = 0;
         } else {
@@ -195,6 +200,8 @@ void parseMidiData(String &midiData) {
         }
     }
 
+    /*
+    // Print parsed MIDI data
     Serial.println();
     Serial.println(motorEvents.size());
     Serial.println();
@@ -204,20 +211,7 @@ void parseMidiData(String &midiData) {
         Serial.print(motorEvents[i].motor);
         Serial.println(';');
     }
-}
-
-void playMidiData() {
-    unsigned long startTime = millis();
-    unsigned long eventPos = 0;
-
-    while (eventPos < motorEvents.size()) {
-        if (motorEvents[eventPos].time <= (millis() - startTime)) {
-            rotateMotorQuarter(motorEvents[eventPos].motor);
-            eventPos++;
-        } else {
-            delay(1);
-        }
-    }
+    */
 }
 
 void setup() {
@@ -319,6 +313,9 @@ void setup() {
         return;
     }
 
+    // Make sure motor events is empty
+    motorEvents.clear();
+
     // Send GET request to get MIDI data from master server
     if (WiFi.status() == WL_CONNECTED) {
         String url = "http://192.168.4.1/mididata?slave=";
@@ -329,16 +326,25 @@ void setup() {
         httpGETRequest(url.c_str(), midiData);
 
         Serial.print("MIDI data length: ");
-        Serial.println(midiData);
+        Serial.println(midiData.length());
 
-        clearMidiData();
         parseMidiData(midiData);
-        playMidiData();
     }
+
+    // TEST: Start playback 3 seconds after midi data received
+    motorEventsStartTime = millis() + 3000;
+    motorEventsPos = 0;
 }
 
 void loop() {
-    bool sync = (millis() - syncTime) % 1000 < 50;
-    digitalWrite(SYNC_LED_PIN, sync ? HIGH : LOW);
-    delay(1);
+    if (motorEventsPos < motorEvents.size() && millis() >= motorEventsStartTime) {
+        if (motorEvents[motorEventsPos].time <= (millis() - motorEventsStartTime)) {
+            rotateMotorQuarter(motorEvents[motorEventsPos].motor);
+            motorEventsPos++;
+        } else {
+            delay(1);
+        }
+    } else {
+        delay(20);
+    }
 }
