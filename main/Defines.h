@@ -12,6 +12,8 @@ const char *MIDI_FILE_NAME = "MIDITEST.MID";
 
 #define TOF_DELAY 100 // ms
 
+#define START_PLAYBACK_DELAY 5000 // ms
+
 #define NUMBER_OF_DEVICES 6 // 1 master + 5 slaves
 
 // MAC addresses
@@ -45,9 +47,24 @@ const unsigned long DEVICE_SYNC_TIMES[NUMBER_OF_DEVICES] = {
 };
 
 // Data structs
-struct test_struct {
-    int x;
-    unsigned long y;
+enum EspNowEventCmd {
+    ESP_NOW_EVENT_NONE = 0,
+
+    ESP_NOW_EVENT_NO_MIDI_DATA,
+
+    ESP_NOW_EVENT_CHECK_DATA,
+    ESP_NOW_EVENT_CHECK_CONFIRM,
+
+    ESP_NOW_EVENT_START_SYNC,
+    ESP_NOW_EVENT_START_CONFIRM,
+    
+    ESP_NOW_EVENT_RESET,
+    ESP_NOW_EVENT_RESET_CONFIRM,
+};
+
+struct EspNowEvent {
+    EspNowEventCmd cmd;
+    unsigned long value;
 };
 
 struct MotorEvent {

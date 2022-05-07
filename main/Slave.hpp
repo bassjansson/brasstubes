@@ -38,8 +38,6 @@ volatile int lastEncodedB = 0;   // Here updated value of encoder store.
 volatile long encoderValueB = 0; // Raw encoder value
 volatile long targetMotorB = 0;  // Target value to stop at
 
-unsigned long syncTime = 0;
-
 std::vector<MotorEvent> motorEvents;
 
 unsigned long motorEventsStartTime = 0;
@@ -124,53 +122,62 @@ void rotateMotorQuarter(int motor) {
         digitalWrite(MOTOR_B2_PIN, HIGH);
     }
 
-    Serial.print("Motor turned: ");
-    Serial.println(motor ? 'B' : 'A');
+    // Serial.print("Motor turned: ");
+    // Serial.println(motor ? 'B' : 'A');
 }
 
 void onDataSend(const uint8_t *mac_addr, esp_now_send_status_t status) {
-    Serial.print("Send to ");
-    Serial.print(macAddressToReadableString(mac_addr));
-    Serial.println(status == ESP_NOW_SEND_SUCCESS ? " succeeded." : " failed.");
+    // Serial.print("Send to ");
+    // Serial.print(macAddressToReadableString(mac_addr));
+    // Serial.println(status == ESP_NOW_SEND_SUCCESS ? " succeeded." : " failed.");
 }
 
 void onDataReceived(const uint8_t *mac, const uint8_t *incomingData, int len) {
     unsigned long receiveTime = millis();
 
-    test_struct test;
-    memcpy(&test, incomingData, sizeof(test));
+    EspNowEvent event;
 
-    if (test.x == 1)
-        syncTime = receiveTime - test.y;
+    if (motorEvents.size() < 1) {
+        event.cmd = ESP_NOW_EVENT_NO_MIDI_DATA;
+        event.value = 1;
+        esp_now_send(DEVICE_MAC_ADDRESSES[0], (uint8_t *)&event, sizeof(event));
 
-    Serial.print(test.x);
-    Serial.print(", ");
-    Serial.println(test.y);
+        delay(100);
+        ESP.restart();
+    }
 
-    /*
-    if (test.x == CMD_NOTE_ON) {
-        if (test.y == DEVICE_NOTES[DEVICE_NUMBER][0]) {
-            rotateQuarterMotorA();
-        } else if (test.y == DEVICE_NOTES[DEVICE_NUMBER][1]) {
-            rotateQuarterMotorB();
+    memcpy(&event, incomingData, sizeof(event));
+
+    if (event.cmd == ESP_NOW_EVENT_CHECK_DATA) {
+        event.cmd = ESP_NOW_EVENT_CHECK_CONFIRM;
+        event.value = motorEvents.size();
+        esp_now_send(DEVICE_MAC_ADDRESSES[0], (uint8_t *)&event, sizeof(event));
+    } else if (event.cmd == ESP_NOW_EVENT_START_SYNC) {
+        motorEventsStartTime = receiveTime + event.value;
+        motorEventsPos = 0;
+
+        event.cmd = ESP_NOW_EVENT_START_CONFIRM;
+        event.value = 1;
+        esp_now_send(DEVICE_MAC_ADDRESSES[0], (uint8_t *)&event, sizeof(event));
+    } else if (event.cmd == ESP_NOW_EVENT_RESET) {
+        bool restart = event.value > 0;
+
+        motorEventsStartTime = 0;
+        motorEventsPos = motorEvents.size();
+
+        // Stop motors immediately
+        targetMotorA = encoderValueA;
+        targetMotorB = encoderValueB;
+
+        event.cmd = ESP_NOW_EVENT_RESET_CONFIRM;
+        event.value = 1;
+        esp_now_send(DEVICE_MAC_ADDRESSES[0], (uint8_t *)&event, sizeof(event));
+
+        if (restart) {
+            delay(100);
+            ESP.restart();
         }
     }
-    */
-
-    // delay(TOF_DELAY);
-    // esp_now_send(DEVICE_MAC_ADDRESSES[0], (uint8_t *)&test, sizeof(test_struct));
-
-    /*
-    test_struct myData;
-    memcpy(&myData, incomingData, sizeof(myData));
-    Serial.print("Bytes received: ");
-    Serial.println(len);
-    Serial.print("x: ");
-    Serial.println(myData.x);
-    Serial.print("y: ");
-    Serial.println(myData.y);
-    Serial.println();
-    */
 }
 
 void parseMidiData(String &midiData) {
@@ -329,11 +336,10 @@ void setup() {
         Serial.println(midiData.length());
 
         parseMidiData(midiData);
+    } else {
+        // Something went wrong, restart
+        ESP.restart();
     }
-
-    // TEST: Start playback 3 seconds after midi data received
-    motorEventsStartTime = millis() + 3000;
-    motorEventsPos = 0;
 }
 
 void loop() {
