@@ -18,6 +18,8 @@ const char *MIDI_FILE_NAME = "MAIN.MID";
 #define BUTTON_PRESSED LOW
 #define DEBOUNCE_DELAY 50 // ms
 
+#define MAX_MOTOR_ON_TIME 3000 // ms
+
 // MAC addresses
 const uint8_t DEVICE_MAC_ADDRESSES[NUMBER_OF_DEVICES][6] = {
     {0x7C, 0xDF, 0xA1, 0x00, 0xD3, 0x08}, // Master  - 7C:DF:A1:00:D3:08

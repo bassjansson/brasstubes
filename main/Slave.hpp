@@ -359,7 +359,7 @@ void loop() {
     }
 
     // Stop motors after 2 seconds in case there's an error
-    if (targetMotorA > encoderValueA && millis() > (onTimeMotorA + 2000)) {
+    if (targetMotorA > encoderValueA && millis() > (onTimeMotorA + MAX_MOTOR_ON_TIME)) {
         digitalWrite(MOTOR_A1_PIN, LOW);
         digitalWrite(MOTOR_A2_PIN, LOW);
 
@@ -368,7 +368,7 @@ void loop() {
         Serial.println("Motor A stopped because of an error.");
     }
 
-    if (targetMotorB > encoderValueB && millis() > (onTimeMotorB + 2000)) {
+    if (targetMotorB > encoderValueB && millis() > (onTimeMotorB + MAX_MOTOR_ON_TIME)) {
         digitalWrite(MOTOR_B1_PIN, LOW);
         digitalWrite(MOTOR_B2_PIN, LOW);
 
