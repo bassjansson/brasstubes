@@ -404,6 +404,18 @@ void setup() {
         }
     }
 
+    // Setting the ESP as an access point
+    Serial.println("Setting up AP...");
+    WiFi.softAP(WIFI_SSID, WIFI_PASS);
+    IPAddress IP = WiFi.softAPIP();
+    Serial.print("AP IP address: ");
+    Serial.println(IP);
+
+    // Start server
+    Serial.println("Setting up HTTP server...");
+    server.on("/mididata", HTTP_GET, onMidiDataGetRequest);
+    server.begin();
+
     // Turn on peripherals power
     pinMode(TFT_PWR_PIN, OUTPUT);
     digitalWrite(TFT_PWR_PIN, HIGH);
@@ -490,18 +502,6 @@ void loop() {
                 break;
         }
 
-        // Setting the ESP as an access point
-        Serial.println("Setting up AP...");
-        WiFi.softAP(WIFI_SSID, WIFI_PASS);
-        IPAddress IP = WiFi.softAPIP();
-        Serial.print("AP IP address: ");
-        Serial.println(IP);
-
-        // Start server
-        Serial.println("Setting up HTTP server...");
-        server.on("/mididata", HTTP_GET, onMidiDataGetRequest);
-        server.begin();
-
         // Wait for clients to connect and collect data
         tftClearScreen();
         tft.setTextColor(ST77XX_WHITE);
@@ -512,9 +512,6 @@ void loop() {
             tft.print(" ");
             delay(1000);
         }
-
-        // Disconnect WiFi
-        WiFi.disconnect();
 
         // Check them all if everything is okay
         tftClearScreen();
