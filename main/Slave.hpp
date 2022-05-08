@@ -50,7 +50,7 @@ bool restartFlag = false;
 WiFiClient client;
 HTTPClient http;
 
-void httpGETRequest(const char *url, String &payload) {
+int httpGETRequest(const char *url, String &payload) {
     // Your Domain name with URL path or IP address with path
     http.begin(client, url);
 
@@ -69,6 +69,9 @@ void httpGETRequest(const char *url, String &payload) {
 
     // Free resources
     http.end();
+
+    // Return response code
+    return httpResponseCode;
 }
 
 void IRAM_ATTR updateEncoderA() {
@@ -328,15 +331,19 @@ void loop() {
         Serial.println(url);
 
         String midiData;
-        httpGETRequest(url.c_str(), midiData);
 
-        Serial.print("MIDI data length: ");
-        Serial.println(midiData.length());
+        if (httpGETRequest(url.c_str(), midiData) == 200) {
+            Serial.print("MIDI data length: ");
+            Serial.println(midiData.length());
 
-        parseMidiData(midiData);
+            parseMidiData(midiData);
 
-        WiFi.disconnect();
-        Serial.print("Disconnected from WiFi.");
+            WiFi.disconnect();
+            Serial.print("Disconnected from WiFi.");
+        } else {
+            Serial.print("HTTP GET request failed.. Will retry..");
+            delay(1000);
+        }
     }
 
     // Schedule motor events
