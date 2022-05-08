@@ -6,7 +6,7 @@
 const char *WIFI_SSID = "BrassTubesAP";
 const char *WIFI_PASS = "KoenDeGrootBassJansson";
 
-const char *MIDI_FILE_NAME = "MIDITEST.MID";
+const char *MIDI_FILE_NAME = "MAIN.MID";
 
 #define CMD_NOTE_ON 0x90
 

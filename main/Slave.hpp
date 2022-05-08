@@ -167,8 +167,8 @@ void onDataReceived(const uint8_t *mac, const uint8_t *incomingData, int len) {
         motorEventsPos = motorEvents.size();
 
         // Stop motors immediately
-        targetMotorA = encoderValueA;
-        targetMotorB = encoderValueB;
+        // targetMotorA = encoderValueA;
+        // targetMotorB = encoderValueB;
 
         event.cmd = ESP_NOW_EVENT_RESET_CONFIRM;
         event.value = 1;

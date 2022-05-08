@@ -50,6 +50,7 @@ uint32_t currentTicks;
 double msPerTick;
 
 String midiData[NUMBER_OF_DEVICES];
+int midiDataCount[NUMBER_OF_DEVICES];
 
 bool deviceDataChecks[NUMBER_OF_DEVICES];
 bool deviceSyncStarts[NUMBER_OF_DEVICES];
@@ -78,8 +79,10 @@ void midiCallback(midi_event *pev) {
         for (int i = 1; i < NUMBER_OF_DEVICES; ++i) {
             if (pev->data[1] == DEVICE_NOTES[i][0]) {
                 midiData[i] += String((unsigned long)timeInMs) + ",0;";
+                midiDataCount[i]++;
             } else if (pev->data[1] == DEVICE_NOTES[i][1]) {
                 midiData[i] += String((unsigned long)timeInMs) + ",1;";
+                midiDataCount[i]++;
             }
         }
     }
@@ -117,11 +120,11 @@ void onDataReceived(const uint8_t *mac, const uint8_t *incomingData, int len) {
         Serial.print("No MIDI data on slave: ");
         Serial.println(deviceNumber);
     } else if (event.cmd == ESP_NOW_EVENT_CHECK_CONFIRM) {
-        // Serial.print("MIDI data length: ");
-        // Serial.println(midiData[deviceNumber].length());
-        // Serial.print("Check data length: ");
+        // Serial.print("MIDI data count: ");
+        // Serial.println(midiDataCount[deviceNumber]);
+        // Serial.print("Check data count: ");
         // Serial.println(event.value);
-        deviceDataChecks[deviceNumber] = event.value > 0 ? 1 : 0;
+        deviceDataChecks[deviceNumber] = midiDataCount[deviceNumber] == event.value ? 1 : 0;
 
         Serial.print(deviceNumber);
         Serial.println(": Check");
@@ -185,7 +188,7 @@ int startPlaybackOnAllSlaves() {
         nextTime = startTime + i * DEVICE_ITERATE_DELAY;
 
         event.cmd = ESP_NOW_EVENT_START_SYNC;
-        event.value = START_PLAYBACK_DELAY - i * DEVICE_ITERATE_DELAY;
+        event.value = START_PLAYBACK_DELAY + (NUMBER_OF_DEVICES - i) * DEVICE_ITERATE_DELAY + 1000;
 
         while (nextTime > millis())
             delay(1);
@@ -378,19 +381,21 @@ void setup() {
     // Initialize SD
     if (!SD.begin(SdSpiConfig(FSPI_CS0, DEDICATED_SPI, FSPI_SCK, &FSPI_SPI))) {
         Serial.println("ERROR init SD card...");
-        Serial.println("Rebooting in 5 seconds.");
+        Serial.println("Rebooting in 10 seconds.");
 
         tft.setTextColor(ST77XX_RED);
         tft.println("ERROR init SD card...");
-        tft.println("Rebooting in 5 seconds.");
+        tft.println("Rebooting in 10 seconds.");
 
-        delay(5000);
+        delay(10000);
         ESP.restart();
     }
 
     // Clear midi data string buffer
-    for (int i = 0; i < NUMBER_OF_DEVICES; ++i)
+    for (int i = 0; i < NUMBER_OF_DEVICES; ++i) {
         midiData[i] = "";
+        midiDataCount[i] = 0;
+    }
 
     // Initialize MIDIFile
     SMF.begin(&SD);
@@ -413,13 +418,13 @@ void setup() {
         tft.println("MIDI file loaded!");
     } else {
         Serial.println("ERROR loading MIDI file...");
-        Serial.println("Rebooting in 5 seconds.");
+        Serial.println("Rebooting in 10 seconds.");
 
         tft.setTextColor(ST77XX_RED);
         tft.println("ERROR loading MIDI file...");
-        tft.println("Rebooting in 5 seconds.");
+        tft.println("Rebooting in 10 seconds.");
 
-        delay(5000);
+        delay(10000);
         ESP.restart();
     }
 }
