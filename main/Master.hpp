@@ -404,18 +404,6 @@ void setup() {
         }
     }
 
-    // Setting the ESP as an access point
-    Serial.println("Setting up AP...");
-    WiFi.softAP(WIFI_SSID, WIFI_PASS);
-    IPAddress IP = WiFi.softAPIP();
-    Serial.print("AP IP address: ");
-    Serial.println(IP);
-
-    // Start server
-    Serial.println("Setting up HTTP server...");
-    server.on("/mididata", HTTP_GET, onMidiDataGetRequest);
-    server.begin();
-
     // Turn on peripherals power
     pinMode(TFT_PWR_PIN, OUTPUT);
     digitalWrite(TFT_PWR_PIN, HIGH);
@@ -498,20 +486,35 @@ void loop() {
         tft.setTextColor(ST77XX_WHITE);
         tft.println("Resetting all\ndroppers:");
         while (!resetDataOnAllSlaves(true)) {
-            if (waitAndCheckForForceContinue(3000))
+            if (waitAndCheckForForceContinue(5000))
                 break;
         }
 
-        // Wait for clients to connect
+        // Setting the ESP as an access point
+        Serial.println("Setting up AP...");
+        WiFi.softAP(WIFI_SSID, WIFI_PASS);
+        IPAddress IP = WiFi.softAPIP();
+        Serial.print("AP IP address: ");
+        Serial.println(IP);
+
+        // Start server
+        Serial.println("Setting up HTTP server...");
+        server.on("/mididata", HTTP_GET, onMidiDataGetRequest);
+        server.begin();
+
+        // Wait for clients to connect and collect data
         tftClearScreen();
         tft.setTextColor(ST77XX_WHITE);
         tft.println("Waiting for droppers\nto collect MIDI\ndata:");
         tft.setTextColor(ST77XX_YELLOW);
-        for (int i = 9; i >= 0; --i) {
+        for (int i = 19; i >= 0; --i) {
             tft.print(i);
             tft.print(" ");
             delay(1000);
         }
+
+        // Disconnect WiFi
+        WiFi.disconnect();
 
         // Check them all if everything is okay
         tftClearScreen();
