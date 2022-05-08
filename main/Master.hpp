@@ -58,6 +58,46 @@ bool deviceHardResets[NUMBER_OF_DEVICES];
 
 bool allSlavesAreChecked = false;
 
+bool isSetupButtonPressed() {
+    if (digitalRead(SETUP_BUTTON_PIN) == BUTTON_PRESSED) {
+        delay(DEBOUNCE_DELAY);
+        if (digitalRead(SETUP_BUTTON_PIN) == BUTTON_PRESSED) {
+            while (digitalRead(SETUP_BUTTON_PIN) == BUTTON_PRESSED)
+                delay(1);
+
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool isStartButtonPressed() {
+    if (digitalRead(START_BUTTON_PIN) == BUTTON_PRESSED) {
+        delay(DEBOUNCE_DELAY);
+        if (digitalRead(START_BUTTON_PIN) == BUTTON_PRESSED) {
+            while (digitalRead(START_BUTTON_PIN) == BUTTON_PRESSED)
+                delay(1);
+
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool waitAndCheckForForceContinue(int delayTimeInMs, bool startOrStop = true) {
+    unsigned long wait = millis() + delayTimeInMs;
+    bool forceContinue = false;
+    while (wait > millis()) {
+        forceContinue = startOrStop ? isStartButtonPressed() : isSetupButtonPressed();
+        if (forceContinue)
+            break;
+        delay(10);
+    }
+    return forceContinue;
+}
+
 static void onMidiDataGetRequest(AsyncWebServerRequest *request) {
     int deviceNumber = request->arg("slave").toInt();
     Serial.print("Got request from slave with number: ");
@@ -146,7 +186,7 @@ void tftClearScreen() {
     tft.setCursor(0, 0);
 }
 
-int checkValidDataOnAllSlaves() {
+bool checkValidDataOnAllSlaves() {
     unsigned long startTime = millis();
     unsigned long nextTime;
     EspNowEvent event;
@@ -166,17 +206,27 @@ int checkValidDataOnAllSlaves() {
         esp_now_send(DEVICE_MAC_ADDRESSES[i], (uint8_t *)&event, sizeof(event));
     }
 
-    delay(DEVICE_ITERATE_DELAY + 1000);
+    delay(DEVICE_ITERATE_DELAY);
 
-    for (int i = 1; i < (NUMBER_OF_SLAVES_IN_USE + 1); ++i) {
-        if (deviceDataChecks[i] == 0)
-            return i;
+    bool success = true;
+    String str = "d";
+
+    for (int i = 1; i < NUMBER_OF_DEVICES; ++i) {
+        if (deviceDataChecks[i] == 0) {
+            str += String(i);
+            success = false;
+        }
     }
 
-    return 0;
+    if (!success) {
+        tft.setTextColor(ST77XX_RED);
+        tft.print(str + " ");
+    }
+
+    return success;
 }
 
-int startPlaybackOnAllSlaves() {
+bool startPlaybackOnAllSlaves() {
     unsigned long startTime = millis();
     unsigned long nextTime;
     EspNowEvent event;
@@ -188,7 +238,7 @@ int startPlaybackOnAllSlaves() {
         nextTime = startTime + i * DEVICE_ITERATE_DELAY;
 
         event.cmd = ESP_NOW_EVENT_START_SYNC;
-        event.value = START_PLAYBACK_DELAY + (NUMBER_OF_DEVICES - i) * DEVICE_ITERATE_DELAY + 1000;
+        event.value = START_PLAYBACK_DELAY + (NUMBER_OF_DEVICES - i) * DEVICE_ITERATE_DELAY;
 
         while (nextTime > millis())
             delay(1);
@@ -196,17 +246,27 @@ int startPlaybackOnAllSlaves() {
         esp_now_send(DEVICE_MAC_ADDRESSES[i], (uint8_t *)&event, sizeof(event));
     }
 
-    delay(DEVICE_ITERATE_DELAY + 1000);
+    delay(DEVICE_ITERATE_DELAY);
 
-    for (int i = 1; i < (NUMBER_OF_SLAVES_IN_USE + 1); ++i) {
-        if (deviceSyncStarts[i] == 0)
-            return i;
+    bool success = true;
+    String str = "d";
+
+    for (int i = 1; i < NUMBER_OF_DEVICES; ++i) {
+        if (deviceSyncStarts[i] == 0) {
+            str += String(i);
+            success = false;
+        }
     }
 
-    return 0;
+    if (!success) {
+        tft.setTextColor(ST77XX_RED);
+        tft.print(str + " ");
+    }
+
+    return success;
 }
 
-int resetDataOnAllSlaves(bool hard = false) {
+bool resetDataOnAllSlaves(bool hard = false) {
     unsigned long startTime = millis();
     unsigned long nextTime;
     EspNowEvent event;
@@ -226,17 +286,24 @@ int resetDataOnAllSlaves(bool hard = false) {
         esp_now_send(DEVICE_MAC_ADDRESSES[i], (uint8_t *)&event, sizeof(event));
     }
 
-    delay(DEVICE_ITERATE_DELAY + 1000);
+    delay(DEVICE_ITERATE_DELAY);
 
-    if (hard)
-        delay(2000);
+    bool success = true;
+    String str = "d";
 
-    for (int i = 1; i < (NUMBER_OF_SLAVES_IN_USE + 1); ++i) {
-        if (deviceHardResets[i] == 0)
-            return i;
+    for (int i = 1; i < NUMBER_OF_DEVICES; ++i) {
+        if (deviceHardResets[i] == 0) {
+            str += String(i);
+            success = false;
+        }
     }
 
-    return 0;
+    if (!success) {
+        tft.setTextColor(ST77XX_RED);
+        tft.print(str + " ");
+    }
+
+    return success;
 }
 
 void setStartButtonLed(bool on) { digitalWrite(START_LED_PIN, !on); }
@@ -246,18 +313,15 @@ void onSetupButtonPressed() {
 
     tftClearScreen();
     tft.setTextColor(ST77XX_WHITE);
-    tft.println("Stopping playback on all slaves");
-
-    tft.setTextColor(ST77XX_RED);
-    int resetted = 0;
-    while (resetted = resetDataOnAllSlaves(false)) {
-        tft.print("s");
-        tft.print(resetted);
-        tft.print(" ");
+    tft.println("Stopping playback on\nall droppers:");
+    while (!resetDataOnAllSlaves(false)) {
+        if (waitAndCheckForForceContinue(3000, false))
+            break;
     }
 
+    tftClearScreen();
     tft.setTextColor(ST77XX_RED);
-    tft.println("\nPlayback stopped!");
+    tft.println("\nPlayback STOPPED!");
 }
 
 void onStartButtonPressed() {
@@ -265,27 +329,24 @@ void onStartButtonPressed() {
 
     tftClearScreen();
     tft.setTextColor(ST77XX_WHITE);
-    tft.println("Starting playback on all slaves");
-
-    tft.setTextColor(ST77XX_RED);
-    int started = 0;
-    while (started = startPlaybackOnAllSlaves()) {
-        tft.print("s");
-        tft.print(started);
-        tft.print(" ");
+    tft.println("Starting playback on\nall droppers:");
+    while (!startPlaybackOnAllSlaves()) {
+        if (waitAndCheckForForceContinue(3000))
+            break;
     }
 
     tft.setTextColor(ST77XX_WHITE);
     tft.println("\nSync success, final countdown:");
     tft.setTextColor(ST77XX_YELLOW);
-    for (int i = (START_PLAYBACK_DELAY / 1000) - 1; i >= 0; --i) {
+    for (int i = (START_PLAYBACK_DELAY / 1000) - 1; i > 0; --i) {
         tft.print(i);
         tft.print(" ");
         delay(1000);
     }
 
+    tftClearScreen();
     tft.setTextColor(ST77XX_GREEN);
-    tft.println("\n\nSTARTED!!! :D");
+    tft.println("\n!!! STARTED !!!\n\n:D :D :D");
 }
 
 void setup() {
@@ -416,6 +477,7 @@ void setup() {
 
         tft.setTextColor(ST77XX_GREEN);
         tft.println("MIDI file loaded!");
+        delay(2000);
     } else {
         Serial.println("ERROR loading MIDI file...");
         Serial.println("Rebooting in 10 seconds.");
@@ -432,20 +494,18 @@ void setup() {
 void loop() {
     if (!allSlavesAreChecked) {
         // Resetting all slaves
+        tftClearScreen();
         tft.setTextColor(ST77XX_WHITE);
-        tft.print("\nResetting all slaves");
-        tft.setTextColor(ST77XX_RED);
-        int resetted = 0;
-        while (resetted = resetDataOnAllSlaves(true)) {
-            tft.print("s");
-            tft.print(resetted);
-            tft.print(" ");
+        tft.println("Resetting all\ndroppers:");
+        while (!resetDataOnAllSlaves(true)) {
+            if (waitAndCheckForForceContinue(3000))
+                break;
         }
 
         // Wait for clients to connect
         tftClearScreen();
         tft.setTextColor(ST77XX_WHITE);
-        tft.print("\nWaiting for them to connect\n");
+        tft.println("Waiting for droppers\nto collect MIDI\ndata:");
         tft.setTextColor(ST77XX_YELLOW);
         for (int i = 9; i >= 0; --i) {
             tft.print(i);
@@ -456,49 +516,29 @@ void loop() {
         // Check them all if everything is okay
         tftClearScreen();
         tft.setTextColor(ST77XX_WHITE);
-        tft.println("Checking data on all slaves");
+        tft.println("Checking MIDI data\non all droppers:");
         setStartButtonLed(false);
-        tft.setTextColor(ST77XX_RED);
-        int checked = 0;
-        while (checked = checkValidDataOnAllSlaves()) {
-            tft.print("s");
-            tft.print(checked);
-            tft.print(" ");
+        while (!checkValidDataOnAllSlaves()) {
+            if (waitAndCheckForForceContinue(3000))
+                break;
         }
         setStartButtonLed(true);
 
         // Finished and ready!
         tftClearScreen();
         tft.setTextColor(ST77XX_WHITE);
-        tft.println("All data on all slaves checked!");
+        tft.println("All data on all\ndroppers checked!\n");
         tft.setTextColor(ST77XX_GREEN);
-        tft.println("\nReady to press START\n\n:) :) :)");
+        tft.println("Ready to press\nSTART\n\n:) :) :)");
 
         allSlavesAreChecked = true;
     }
 
-    static const uint8_t BUTTON_PRESSED = LOW;
-    static const uint8_t DEBOUNCE_DELAY = 50; // ms
+    if (isSetupButtonPressed())
+        onSetupButtonPressed();
 
-    if (digitalRead(SETUP_BUTTON_PIN) == BUTTON_PRESSED) {
-        delay(DEBOUNCE_DELAY);
-        if (digitalRead(SETUP_BUTTON_PIN) == BUTTON_PRESSED) {
-            while (digitalRead(SETUP_BUTTON_PIN) == BUTTON_PRESSED)
-                delay(1);
-
-            onSetupButtonPressed();
-        }
-    }
-
-    if (digitalRead(START_BUTTON_PIN) == BUTTON_PRESSED) {
-        delay(DEBOUNCE_DELAY);
-        if (digitalRead(START_BUTTON_PIN) == BUTTON_PRESSED) {
-            while (digitalRead(START_BUTTON_PIN) == BUTTON_PRESSED)
-                delay(1);
-
-            onStartButtonPressed();
-        }
-    }
+    if (isStartButtonPressed())
+        onStartButtonPressed();
 
     delay(10);
 }

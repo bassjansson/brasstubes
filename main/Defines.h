@@ -14,7 +14,9 @@ const char *MIDI_FILE_NAME = "MAIN.MID";
 #define START_PLAYBACK_DELAY 10000 // ms
 
 #define NUMBER_OF_DEVICES 6 // 1 master + 5 slaves
-#define NUMBER_OF_SLAVES_IN_USE 5
+
+#define BUTTON_PRESSED LOW
+#define DEBOUNCE_DELAY 50 // ms
 
 // MAC addresses
 const uint8_t DEVICE_MAC_ADDRESSES[NUMBER_OF_DEVICES][6] = {
