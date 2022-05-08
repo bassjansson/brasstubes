@@ -33,10 +33,12 @@
 volatile int lastEncodedA = 0;   // Here updated value of encoder store.
 volatile long encoderValueA = 0; // Raw encoder value
 volatile long targetMotorA = 0;  // Target value to stop at
+volatile unsigned long onTimeMotorA = 0; // Time when turned on
 
 volatile int lastEncodedB = 0;   // Here updated value of encoder store.
 volatile long encoderValueB = 0; // Raw encoder value
 volatile long targetMotorB = 0;  // Target value to stop at
+volatile unsigned long onTimeMotorB = 0; // Time when turned on
 
 std::vector<MotorEvent> motorEvents;
 
@@ -114,11 +116,13 @@ void IRAM_ATTR updateEncoderB() {
 void rotateMotorQuarter(int motor) {
     if (motor <= 0) {
         targetMotorA += GEAR_RATIO_MOTOR_A * ENCODER_STEPS_PER_REV / 4;
+        onTimeMotorA = millis();
 
         digitalWrite(MOTOR_A1_PIN, LOW);
         digitalWrite(MOTOR_A2_PIN, HIGH);
     } else {
         targetMotorB += GEAR_RATIO_MOTOR_B * ENCODER_STEPS_PER_REV / 4;
+        onTimeMotorB = millis();
 
         digitalWrite(MOTOR_B1_PIN, LOW);
         digitalWrite(MOTOR_B2_PIN, HIGH);
@@ -352,5 +356,24 @@ void loop() {
     if (restartFlag) {
         delay(500);
         ESP.restart();
+    }
+
+    // Stop motors after 2 seconds in case there's an error
+    if (targetMotorA > encoderValueA && millis() > (onTimeMotorA + 2000)) {
+        digitalWrite(MOTOR_A1_PIN, LOW);
+        digitalWrite(MOTOR_A2_PIN, LOW);
+
+        targetMotorA = encoderValueA;
+
+        Serial.println("Motor A stopped because of an error.");
+    }
+
+    if (targetMotorB > encoderValueB && millis() > (onTimeMotorB + 2000)) {
+        digitalWrite(MOTOR_B1_PIN, LOW);
+        digitalWrite(MOTOR_B2_PIN, LOW);
+
+        targetMotorB = encoderValueB;
+
+        Serial.println("Motor B stopped because of an error.");
     }
 }
