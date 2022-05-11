@@ -56,8 +56,6 @@ bool deviceDataChecks[NUMBER_OF_DEVICES];
 bool deviceSyncStarts[NUMBER_OF_DEVICES];
 bool deviceHardResets[NUMBER_OF_DEVICES];
 
-bool allSlavesAreChecked = false;
-
 bool isSetupButtonPressed() {
     if (digitalRead(SETUP_BUTTON_PIN) == BUTTON_PRESSED) {
         delay(DEBOUNCE_DELAY);
@@ -187,6 +185,10 @@ void tftClearScreen() {
 }
 
 bool checkValidDataOnAllSlaves() {
+    tftClearScreen();
+    tft.setTextColor(ST77XX_WHITE);
+    tft.println("Checking MIDI data\non all droppers:");
+
     unsigned long startTime = millis();
     unsigned long nextTime;
     EspNowEvent event;
@@ -198,7 +200,7 @@ bool checkValidDataOnAllSlaves() {
         nextTime = startTime + i * DEVICE_ITERATE_DELAY;
 
         event.cmd = ESP_NOW_EVENT_CHECK_DATA;
-        event.value = 1;
+        event.value = midiDataCount[deviceNumber];
 
         while (nextTime > millis())
             delay(1);
@@ -213,20 +215,26 @@ bool checkValidDataOnAllSlaves() {
 
     for (int i = 1; i < NUMBER_OF_DEVICES; ++i) {
         if (deviceDataChecks[i] == 0) {
-            str += String(i);
+            str += " " + String(i);
             success = false;
         }
     }
 
     if (!success) {
         tft.setTextColor(ST77XX_RED);
-        tft.print(str + " ");
+        tft.println(str);
+        tft.setTextColor(ST77XX_YELLOW);
+        tft.println("Press START to\nforce continue.");
     }
 
     return success;
 }
 
 bool startPlaybackOnAllSlaves() {
+    tftClearScreen();
+    tft.setTextColor(ST77XX_WHITE);
+    tft.println("Starting playback on\nall droppers:");
+
     unsigned long startTime = millis();
     unsigned long nextTime;
     EspNowEvent event;
@@ -253,20 +261,26 @@ bool startPlaybackOnAllSlaves() {
 
     for (int i = 1; i < NUMBER_OF_DEVICES; ++i) {
         if (deviceSyncStarts[i] == 0) {
-            str += String(i);
+            str += " " + String(i);
             success = false;
         }
     }
 
     if (!success) {
         tft.setTextColor(ST77XX_RED);
-        tft.print(str + " ");
+        tft.println(str);
+        tft.setTextColor(ST77XX_YELLOW);
+        tft.println("Press START to\nforce continue.");
     }
 
     return success;
 }
 
-bool resetDataOnAllSlaves(bool hard = false) {
+bool resetDataOnAllSlaves() {
+    tftClearScreen();
+    tft.setTextColor(ST77XX_WHITE);
+    tft.println("Stopping playback on\nall droppers:");
+
     unsigned long startTime = millis();
     unsigned long nextTime;
     EspNowEvent event;
@@ -278,7 +292,7 @@ bool resetDataOnAllSlaves(bool hard = false) {
         nextTime = startTime + i * DEVICE_ITERATE_DELAY;
 
         event.cmd = ESP_NOW_EVENT_RESET;
-        event.value = hard ? 1 : 0; // 0 = soft, 1 = hard
+        event.value = 1;
 
         while (nextTime > millis())
             delay(1);
@@ -293,14 +307,16 @@ bool resetDataOnAllSlaves(bool hard = false) {
 
     for (int i = 1; i < NUMBER_OF_DEVICES; ++i) {
         if (deviceHardResets[i] == 0) {
-            str += String(i);
+            str += " " + String(i);
             success = false;
         }
     }
 
     if (!success) {
         tft.setTextColor(ST77XX_RED);
-        tft.print(str + " ");
+        tft.println(str);
+        tft.setTextColor(ST77XX_YELLOW);
+        tft.println("Press STOP to\nforce continue.");
     }
 
     return success;
@@ -308,17 +324,33 @@ bool resetDataOnAllSlaves(bool hard = false) {
 
 void setStartButtonLed(bool on) { digitalWrite(START_LED_PIN, !on); }
 
-void onSetupButtonPressed() {
-    // Stop all slaves
-
-    tftClearScreen();
-    tft.setTextColor(ST77XX_WHITE);
-    tft.println("Stopping playback on\nall droppers:");
-    while (!resetDataOnAllSlaves(false)) {
-        if (waitAndCheckForForceContinue(3000, false))
+void onCheckAllSlaves() {
+    // Check all droppers if they have the MIDI data
+    setStartButtonLed(false);
+    while (!checkValidDataOnAllSlaves()) {
+        if (waitAndCheckForForceContinue(FORCE_CONTINUE_WAIT_TIME, true)) // START button
             break;
     }
+    setStartButtonLed(true);
 
+    // Finished and ready!
+    tftClearScreen();
+    tft.setTextColor(ST77XX_WHITE);
+    tft.println("All data on all\ndroppers checked!\n");
+    tft.setTextColor(ST77XX_GREEN);
+    tft.println("Ready to press\nSTART\n:) :) :)");
+}
+
+void onSetupButtonPressed() {
+    // Stop all slaves
+    setStartButtonLed(false);
+    while (!resetDataOnAllSlaves()) {
+        if (waitAndCheckForForceContinue(FORCE_CONTINUE_WAIT_TIME, false)) // STOP button
+            break;
+    }
+    setStartButtonLed(true);
+
+    // Stopped successfully!
     tftClearScreen();
     tft.setTextColor(ST77XX_RED);
     tft.println("\nPlayback STOPPED!");
@@ -326,27 +358,24 @@ void onSetupButtonPressed() {
 
 void onStartButtonPressed() {
     // Start all slaves
-
-    tftClearScreen();
-    tft.setTextColor(ST77XX_WHITE);
-    tft.println("Starting playback on\nall droppers:");
+    setStartButtonLed(false);
     while (!startPlaybackOnAllSlaves()) {
-        if (waitAndCheckForForceContinue(3000))
+        if (waitAndCheckForForceContinue(FORCE_CONTINUE_WAIT_TIME, true)) // START button
             break;
     }
+    setStartButtonLed(true);
 
+    // Started successfully!
+    tftClearScreen();
     tft.setTextColor(ST77XX_WHITE);
-    tft.println("\nSync success, final countdown:");
+    tft.println("Sync success,\nfinal countdown:");
     tft.setTextColor(ST77XX_YELLOW);
     for (int i = (START_PLAYBACK_DELAY / 1000) - 1; i > 0; --i) {
-        tft.print(i);
-        tft.print(" ");
+        tft.print(String(i) + " ");
         delay(1000);
     }
-
-    tftClearScreen();
     tft.setTextColor(ST77XX_GREEN);
-    tft.println("\n!!! STARTED !!!\n\n:D :D :D");
+    tft.println("\n!!! STARTED !!!\n:D :D :D");
 }
 
 void setup() {
@@ -492,45 +521,9 @@ void setup() {
 }
 
 void loop() {
-    if (!allSlavesAreChecked) {
-        // Resetting all slaves
-        tftClearScreen();
-        tft.setTextColor(ST77XX_WHITE);
-        tft.println("Resetting all\ndroppers:");
-        while (!resetDataOnAllSlaves(true)) {
-            if (waitAndCheckForForceContinue(5000))
-                break;
-        }
-
-        // Wait for clients to connect and collect data
-        tftClearScreen();
-        tft.setTextColor(ST77XX_WHITE);
-        tft.println("Waiting for droppers\nto collect MIDI\ndata:");
-        tft.setTextColor(ST77XX_YELLOW);
-        for (int i = 19; i >= 0; --i) {
-            tft.print(i);
-            tft.print(" ");
-            delay(1000);
-        }
-
-        // Check them all if everything is okay
-        tftClearScreen();
-        tft.setTextColor(ST77XX_WHITE);
-        tft.println("Checking MIDI data\non all droppers:");
-        setStartButtonLed(false);
-        while (!checkValidDataOnAllSlaves()) {
-            if (waitAndCheckForForceContinue(3000))
-                break;
-        }
-        setStartButtonLed(true);
-
-        // Finished and ready!
-        tftClearScreen();
-        tft.setTextColor(ST77XX_WHITE);
-        tft.println("All data on all\ndroppers checked!\n");
-        tft.setTextColor(ST77XX_GREEN);
-        tft.println("Ready to press\nSTART\n\n:) :) :)");
-
+    static bool allSlavesAreChecked = false;
+    if (allSlavesAreChecked == false) {
+        onCheckAllSlaves();
         allSlavesAreChecked = true;
     }
 
