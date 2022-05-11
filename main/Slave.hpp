@@ -30,14 +30,14 @@
 #define GEAR_RATIO_MOTOR_A 298
 #define GEAR_RATIO_MOTOR_B 298
 
-volatile int lastEncodedA = 0;   // Here updated value of encoder store.
-volatile long encoderValueA = 0; // Raw encoder value
-volatile long targetMotorA = 0;  // Target value to stop at
+volatile int lastEncodedA = 0;           // Here updated value of encoder store.
+volatile long encoderValueA = 0;         // Raw encoder value
+volatile long targetMotorA = 0;          // Target value to stop at
 volatile unsigned long onTimeMotorA = 0; // Time when turned on
 
-volatile int lastEncodedB = 0;   // Here updated value of encoder store.
-volatile long encoderValueB = 0; // Raw encoder value
-volatile long targetMotorB = 0;  // Target value to stop at
+volatile int lastEncodedB = 0;           // Here updated value of encoder store.
+volatile long encoderValueB = 0;         // Raw encoder value
+volatile long targetMotorB = 0;          // Target value to stop at
 volatile unsigned long onTimeMotorB = 0; // Time when turned on
 
 std::vector<MotorEvent> motorEvents;
@@ -148,12 +148,18 @@ void onDataReceived(const uint8_t *mac, const uint8_t *incomingData, int len) {
     memcpy(&event, incomingData, sizeof(event));
 
     if (event.cmd == ESP_NOW_EVENT_CHECK_DATA) {
-        if (downloadMidiDataTries < 1) {
-            Serial.println("Connecting to WiFi...");
-            WiFi.begin(WIFI_SSID, WIFI_PASS);
-            downloadMidiDataTries = 3;
-            Serial.print("Starting MIDI data download, tries left: ");
-            Serial.println(downloadMidiDataTries);
+        if (event.value > 0) {
+            if (downloadMidiDataTries < 1) {
+                Serial.println("Connecting to WiFi...");
+                WiFi.begin(WIFI_SSID, WIFI_PASS);
+                downloadMidiDataTries = 3;
+                Serial.print("Starting MIDI data download, tries left: ");
+                Serial.println(downloadMidiDataTries);
+            }
+        } else {
+            event.cmd = ESP_NOW_EVENT_CHECK_CONFIRM;
+            event.value = 0;
+            esp_now_send(DEVICE_MAC_ADDRESSES[0], (uint8_t *)&event, sizeof(event));
         }
     } else if (event.cmd == ESP_NOW_EVENT_START_SYNC) {
         motorEventsStartTime = receiveTime + event.value;

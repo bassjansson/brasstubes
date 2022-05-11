@@ -164,18 +164,24 @@ void onDataReceived(const uint8_t *mac, const uint8_t *incomingData, int len) {
         // Serial.println(event.value);
         deviceDataChecks[deviceNumber] = midiDataCount[deviceNumber] == event.value ? 1 : 0;
 
+        Serial.print("Event from S");
         Serial.print(deviceNumber);
-        Serial.println(": Check");
+        Serial.print(": Check - ");
+        Serial.println(deviceDataChecks[deviceNumber]);
     } else if (event.cmd == ESP_NOW_EVENT_START_CONFIRM) {
-        deviceSyncStarts[deviceNumber] = 1;
+        deviceSyncStarts[deviceNumber] = event.value > 0 ? 1 : 0;
 
+        Serial.print("Event from S");
         Serial.print(deviceNumber);
-        Serial.println(": Start");
+        Serial.print(": Start - ");
+        Serial.println(deviceSyncStarts[deviceNumber]);
     } else if (event.cmd == ESP_NOW_EVENT_RESET_CONFIRM) {
-        deviceHardResets[deviceNumber] = 1;
+        deviceHardResets[deviceNumber] = event.value > 0 ? 1 : 0;
 
+        Serial.print("Event from S");
         Serial.print(deviceNumber);
-        Serial.println(": Reset");
+        Serial.print(": Stop - ");
+        Serial.println(deviceHardResets[deviceNumber]);
     }
 }
 
@@ -192,9 +198,6 @@ bool checkValidDataOnAllSlaves() {
     unsigned long startTime = millis();
     unsigned long nextTime;
     EspNowEvent event;
-
-    for (int i = 1; i < NUMBER_OF_DEVICES; ++i)
-        deviceDataChecks[i] = 0;
 
     for (int i = 1; i < NUMBER_OF_DEVICES; ++i) {
         nextTime = startTime + i * DEVICE_ITERATE_DELAY;
@@ -239,6 +242,7 @@ bool startPlaybackOnAllSlaves() {
     unsigned long nextTime;
     EspNowEvent event;
 
+    // Reset all check flags
     for (int i = 1; i < NUMBER_OF_DEVICES; ++i)
         deviceSyncStarts[i] = 0;
 
@@ -285,9 +289,6 @@ bool resetDataOnAllSlaves() {
     unsigned long nextTime;
     EspNowEvent event;
 
-    for (int i = 1; i < NUMBER_OF_DEVICES; ++i)
-        deviceHardResets[i] = 0;
-
     for (int i = 1; i < NUMBER_OF_DEVICES; ++i) {
         nextTime = startTime + i * DEVICE_ITERATE_DELAY;
 
@@ -325,6 +326,10 @@ bool resetDataOnAllSlaves() {
 void setStartButtonLed(bool on) { digitalWrite(START_LED_PIN, !on); }
 
 void onCheckAllSlaves() {
+    // Reset all check flags
+    for (int i = 1; i < NUMBER_OF_DEVICES; ++i)
+        deviceDataChecks[i] = 0;
+
     // Check all droppers if they have the MIDI data
     setStartButtonLed(false);
     while (!checkValidDataOnAllSlaves()) {
@@ -342,6 +347,10 @@ void onCheckAllSlaves() {
 }
 
 void onSetupButtonPressed() {
+    // Reset all check flags
+    for (int i = 1; i < NUMBER_OF_DEVICES; ++i)
+        deviceHardResets[i] = 0;
+
     // Stop all slaves
     setStartButtonLed(false);
     while (!resetDataOnAllSlaves()) {
