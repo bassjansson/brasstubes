@@ -45,7 +45,7 @@ std::vector<MotorEvent> motorEvents;
 unsigned long motorEventsStartTime = 0;
 unsigned long motorEventsPos = 0;
 
-bool restartFlag = false;
+int downloadMidiDataTries = 0;
 
 WiFiClient client;
 HTTPClient http;
@@ -148,34 +148,23 @@ void onDataReceived(const uint8_t *mac, const uint8_t *incomingData, int len) {
     memcpy(&event, incomingData, sizeof(event));
 
     if (event.cmd == ESP_NOW_EVENT_CHECK_DATA) {
-        event.cmd = ESP_NOW_EVENT_CHECK_CONFIRM;
-        event.value = motorEvents.size();
-        esp_now_send(DEVICE_MAC_ADDRESSES[0], (uint8_t *)&event, sizeof(event));
-    } else if (event.cmd == ESP_NOW_EVENT_START_SYNC) {
-        if (motorEvents.size() < 1) {
-            motorEventsStartTime = 0;
-            motorEventsPos = 0;
-
-            event.cmd = ESP_NOW_EVENT_NO_MIDI_DATA;
-            event.value = 1;
-            esp_now_send(DEVICE_MAC_ADDRESSES[0], (uint8_t *)&event, sizeof(event));
-        } else {
-            motorEventsStartTime = receiveTime + event.value;
-            motorEventsPos = 0;
-
-            event.cmd = ESP_NOW_EVENT_START_CONFIRM;
-            event.value = 1;
-            esp_now_send(DEVICE_MAC_ADDRESSES[0], (uint8_t *)&event, sizeof(event));
+        if (downloadMidiDataTries < 1) {
+            Serial.println("Connecting to WiFi...");
+            WiFi.begin(WIFI_SSID, WIFI_PASS);
+            downloadMidiDataTries = 3;
+            Serial.print("Starting MIDI data download, tries left: ");
+            Serial.println(downloadMidiDataTries);
         }
-    } else if (event.cmd == ESP_NOW_EVENT_RESET) {
-        restartFlag = event.value > 0;
+    } else if (event.cmd == ESP_NOW_EVENT_START_SYNC) {
+        motorEventsStartTime = receiveTime + event.value;
+        motorEventsPos = 0;
 
+        event.cmd = ESP_NOW_EVENT_START_CONFIRM;
+        event.value = 1;
+        esp_now_send(DEVICE_MAC_ADDRESSES[0], (uint8_t *)&event, sizeof(event));
+    } else if (event.cmd == ESP_NOW_EVENT_RESET) {
         motorEventsStartTime = 0;
         motorEventsPos = motorEvents.size();
-
-        // Stop motors immediately
-        // targetMotorA = encoderValueA;
-        // targetMotorB = encoderValueB;
 
         event.cmd = ESP_NOW_EVENT_RESET_CONFIRM;
         event.value = 1;
@@ -312,37 +301,48 @@ void setup() {
         return;
     }
 
-    // Connect to master device with WiFi
-    Serial.println("Connecting...");
-    WiFi.begin(WIFI_SSID, WIFI_PASS);
-
     // Make sure motor events is empty
     motorEvents.clear();
 }
 
 void loop() {
     // Send GET request to get MIDI data from master server
-    if (motorEvents.size() == 0 && WiFi.status() == WL_CONNECTED) {
-        Serial.print("Connected to WiFi network with IP Address: ");
+    if (downloadMidiDataTries > 0 && WiFi.status() == WL_CONNECTED) {
+        Serial.print("Downloading MIDI data with IP Address: ");
         Serial.println(WiFi.localIP());
+        Serial.print("Tries left: ");
+        Serial.println(downloadMidiDataTries);
 
         String url = "http://192.168.4.1/mididata?slave=";
         url += DEVICE_NUMBER;
+        Serial.print("Downloading from: ");
         Serial.println(url);
 
         String midiData;
 
         if (httpGETRequest(url.c_str(), midiData) == 200) {
-            Serial.print("MIDI data length: ");
+            Serial.print("Success! MIDI data received with length: ");
             Serial.println(midiData.length());
 
             parseMidiData(midiData);
 
             WiFi.disconnect();
-            Serial.print("Disconnected from WiFi.");
+            Serial.println("Disconnected from WiFi.");
+
+            EspNowEvent event;
+            event.cmd = ESP_NOW_EVENT_CHECK_CONFIRM;
+            event.value = motorEvents.size();
+            esp_now_send(DEVICE_MAC_ADDRESSES[0], (uint8_t *)&event, sizeof(event));
+
+            downloadMidiDataTries = 0;
         } else {
-            Serial.print("HTTP GET request failed.. Will retry..");
-            delay(1000);
+            downloadMidiDataTries--;
+
+            if (downloadMidiDataTries > 0) {
+                Serial.print("MIDI data download failed.. Will try again, tries left: ");
+                Serial.println(downloadMidiDataTries);
+                delay(500);
+            }
         }
     }
 
@@ -357,12 +357,6 @@ void loop() {
         }
     } else {
         delay(20);
-    }
-
-    // Restart if requested
-    if (restartFlag) {
-        delay(500);
-        ESP.restart();
     }
 
     // Stop motors after 2 seconds in case there's an error
