@@ -203,7 +203,7 @@ bool checkValidDataOnAllSlaves() {
         nextTime = startTime + i * DEVICE_ITERATE_DELAY;
 
         event.cmd = ESP_NOW_EVENT_CHECK_DATA;
-        event.value = midiDataCount[deviceNumber];
+        event.value = midiDataCount[i];
 
         while (nextTime > millis())
             delay(1);
