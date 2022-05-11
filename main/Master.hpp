@@ -209,23 +209,39 @@ bool checkValidDataOnAllSlaves() {
             delay(1);
 
         esp_now_send(DEVICE_MAC_ADDRESSES[i], (uint8_t *)&event, sizeof(event));
+
+        tft.setTextColor(ST77XX_YELLOW);
+        tft.print("d" + String(i) + " ");
     }
 
     delay(DEVICE_ITERATE_DELAY);
 
+    // Give slaves time to download data
+    tft.setTextColor(ST77XX_YELLOW);
+    for (int i = 0; i < 3; ++i) {
+        tft.print(".");
+        delay(1000);
+    }
+
+    tft.println();
+
     bool success = true;
-    String str = "d";
 
     for (int i = 1; i < NUMBER_OF_DEVICES; ++i) {
-        if (deviceDataChecks[i] == 0) {
-            str += " " + String(i);
+        if (deviceDataChecks[i] > 0) {
+            tft.setTextColor(ST77XX_GREEN);
+            tft.print(" v ");
+        } else {
+            tft.setTextColor(ST77XX_RED);
+            tft.print(" X ");
+
             success = false;
         }
     }
 
+    tft.println();
+
     if (!success) {
-        tft.setTextColor(ST77XX_RED);
-        tft.println(str);
         tft.setTextColor(ST77XX_YELLOW);
         tft.println("Press START to\nforce continue.");
     }
@@ -256,23 +272,32 @@ bool startPlaybackOnAllSlaves() {
             delay(1);
 
         esp_now_send(DEVICE_MAC_ADDRESSES[i], (uint8_t *)&event, sizeof(event));
+
+        tft.setTextColor(ST77XX_YELLOW);
+        tft.print("d" + String(i) + " ");
     }
 
     delay(DEVICE_ITERATE_DELAY);
 
+    tft.println();
+
     bool success = true;
-    String str = "d";
 
     for (int i = 1; i < NUMBER_OF_DEVICES; ++i) {
-        if (deviceSyncStarts[i] == 0) {
-            str += " " + String(i);
+        if (deviceSyncStarts[i] > 0) {
+            tft.setTextColor(ST77XX_GREEN);
+            tft.print(" v ");
+        } else {
+            tft.setTextColor(ST77XX_RED);
+            tft.print(" X ");
+
             success = false;
         }
     }
 
+    tft.println();
+
     if (!success) {
-        tft.setTextColor(ST77XX_RED);
-        tft.println(str);
         tft.setTextColor(ST77XX_YELLOW);
         tft.println("Press START to\nforce continue.");
     }
@@ -299,23 +324,32 @@ bool resetDataOnAllSlaves() {
             delay(1);
 
         esp_now_send(DEVICE_MAC_ADDRESSES[i], (uint8_t *)&event, sizeof(event));
+
+        tft.setTextColor(ST77XX_YELLOW);
+        tft.print("d" + String(i) + " ");
     }
 
     delay(DEVICE_ITERATE_DELAY);
 
+    tft.println();
+
     bool success = true;
-    String str = "d";
 
     for (int i = 1; i < NUMBER_OF_DEVICES; ++i) {
-        if (deviceHardResets[i] == 0) {
-            str += " " + String(i);
+        if (deviceHardResets[i] > 0) {
+            tft.setTextColor(ST77XX_GREEN);
+            tft.print(" v ");
+        } else {
+            tft.setTextColor(ST77XX_RED);
+            tft.print(" X ");
+
             success = false;
         }
     }
 
+    tft.println();
+
     if (!success) {
-        tft.setTextColor(ST77XX_RED);
-        tft.println(str);
         tft.setTextColor(ST77XX_YELLOW);
         tft.println("Press STOP to\nforce continue.");
     }

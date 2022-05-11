@@ -347,7 +347,7 @@ void loop() {
             if (downloadMidiDataTries > 0) {
                 Serial.print("MIDI data download failed.. Will try again, tries left: ");
                 Serial.println(downloadMidiDataTries);
-                delay(500);
+                delay(550);
             }
         }
     }
