@@ -12,7 +12,7 @@ const char *MIDI_FILE_NAME = "MAIN.MID";
 
 #define DEVICE_ITERATE_DELAY 300      // ms
 #define START_PLAYBACK_DELAY 10000    // ms
-#define FORCE_CONTINUE_WAIT_TIME 3000 // ms
+#define FORCE_CONTINUE_WAIT_TIME 4000 // ms
 
 #define NUMBER_OF_DEVICES 6 // 1 master + 5 slaves
 

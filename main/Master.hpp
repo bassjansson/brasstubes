@@ -219,9 +219,9 @@ bool checkValidDataOnAllSlaves() {
 
     // Give slaves time to download data
     tft.setTextColor(ST77XX_YELLOW);
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < 4; ++i) {
         tft.print(".");
-        delay(1000);
+        delay(2000);
     }
 
     tft.println();
