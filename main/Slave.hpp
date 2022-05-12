@@ -57,7 +57,7 @@ void onWiFiConnected(WiFiEvent_t event, WiFiEventInfo_t info) {
 
 void onWiFiDisconnected(WiFiEvent_t event, WiFiEventInfo_t info) {
     Serial.print("Disconnected from master WiFi! Reason: ");
-    Serial.println(info.disconnected.reason);
+    Serial.println(info.wifi_sta_disconnected.reason);
     // Serial.println("Trying to Reconnect");
     // WiFi.begin(ssid, password);
 }
