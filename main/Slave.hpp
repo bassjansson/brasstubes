@@ -47,6 +47,7 @@ unsigned long motorEventsPos = 0;
 
 int downloadMidiDataTries = 0;
 bool requestRestart = false;
+bool hasBeenConnected = false;
 
 WiFiClient client;
 HTTPClient http;
@@ -170,7 +171,7 @@ void onDataReceived(const uint8_t *mac, const uint8_t *incomingData, int len) {
             }
 
             // Restart if not connected to WiFi
-            if (WiFi.status() != WL_CONNECTED) {
+            if (hasBeenConnected && WiFi.status() != WL_CONNECTED) {
                 Serial.println("Not connected to master WiFi, restarting...");
                 requestRestart = true;
             }
@@ -306,14 +307,6 @@ void setup() {
     Serial.print("  Forced MAC Address:  ");
     Serial.println(WiFi.macAddress());
 
-    // Connect to master device with WiFi
-    Serial.println("Connecting to master WiFi...");
-    WiFi.begin(WIFI_SSID, WIFI_PASS);
-    while (WiFi.status() != WL_CONNECTED)
-        delay(10);
-    Serial.print("Connected to master WiFi with IP Address: ");
-    Serial.println(WiFi.localIP());
-
     // Init ESP-NOW
     if (esp_now_init() != ESP_OK) {
         Serial.println("Error initializing ESP-NOW.");
@@ -335,6 +328,10 @@ void setup() {
         return;
     }
 
+    // Connect to master device with WiFi
+    Serial.println("Connecting to master WiFi...");
+    WiFi.begin(WIFI_SSID, WIFI_PASS);
+
     // Make sure motor events is empty
     motorEvents.clear();
 }
@@ -343,7 +340,14 @@ void loop() {
     // Restart if requested
     if (requestRestart)
         ESP.restart();
-        
+
+    // Check if connected
+    if (!hasBeenConnected && WiFi.status() == WL_CONNECTED) {
+        hasBeenConnected = true;
+        Serial.print("Connected to master WiFi with IP Address: ");
+        Serial.println(WiFi.localIP());
+    }
+
     // Send GET request to get MIDI data from master server
     if (downloadMidiDataTries > 0 && WiFi.status() == WL_CONNECTED) {
         Serial.print("Downloading MIDI data, tries left: ");
