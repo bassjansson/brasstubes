@@ -46,6 +46,7 @@ unsigned long motorEventsStartTime = 0;
 unsigned long motorEventsPos = 0;
 
 int downloadMidiDataTries = 0;
+bool requestRestart = false;
 
 WiFiClient client;
 HTTPClient http;
@@ -168,10 +169,10 @@ void onDataReceived(const uint8_t *mac, const uint8_t *incomingData, int len) {
                 Serial.println(downloadMidiDataTries);
             }
 
-            // Connect to master device with WiFi
+            // Restart if not connected to WiFi
             if (WiFi.status() != WL_CONNECTED) {
-                Serial.println("Not connected to master WiFi, reconnecting...");
-                WiFi.reconnect();
+                Serial.println("Not connected to master WiFi, restarting...");
+                requestRestart = true;
             }
         } else {
             event.cmd = ESP_NOW_EVENT_CHECK_CONFIRM;
@@ -305,6 +306,14 @@ void setup() {
     Serial.print("  Forced MAC Address:  ");
     Serial.println(WiFi.macAddress());
 
+    // Connect to master device with WiFi
+    Serial.println("Connecting to master WiFi...");
+    WiFi.begin(WIFI_SSID, WIFI_PASS);
+    while (WiFi.status() != WL_CONNECTED)
+        delay(10);
+    Serial.print("Connected to master WiFi with IP Address: ");
+    Serial.println(WiFi.localIP());
+
     // Init ESP-NOW
     if (esp_now_init() != ESP_OK) {
         Serial.println("Error initializing ESP-NOW.");
@@ -326,20 +335,18 @@ void setup() {
         return;
     }
 
-    // Connect to master device with WiFi
-    Serial.println("Connecting to master WiFi...");
-    WiFi.begin(WIFI_SSID, WIFI_PASS);
-
     // Make sure motor events is empty
     motorEvents.clear();
 }
 
 void loop() {
+    // Restart if requested
+    if (requestRestart)
+        ESP.restart();
+        
     // Send GET request to get MIDI data from master server
     if (downloadMidiDataTries > 0 && WiFi.status() == WL_CONNECTED) {
-        Serial.print("Downloading MIDI data with IP Address: ");
-        Serial.println(WiFi.localIP());
-        Serial.print("Tries left: ");
+        Serial.print("Downloading MIDI data, tries left: ");
         Serial.println(downloadMidiDataTries);
 
         String url = "http://192.168.4.1/mididata?slave=";
@@ -355,8 +362,8 @@ void loop() {
 
             parseMidiData(midiData);
 
-            // Serial.println("Disconnecting from master WiFi...");
-            // WiFi.disconnect();
+            Serial.println("Disconnecting from master WiFi...");
+            WiFi.disconnect();
 
             EspNowEvent event;
             event.cmd = ESP_NOW_EVENT_CHECK_CONFIRM;
