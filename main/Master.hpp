@@ -208,7 +208,8 @@ bool checkValidDataOnAllSlaves() {
         while (nextTime > millis())
             delay(1);
 
-        esp_now_send(DEVICE_MAC_ADDRESSES[i], (uint8_t *)&event, sizeof(event));
+        if (deviceDataChecks[i] == 0)
+            esp_now_send(DEVICE_MAC_ADDRESSES[i], (uint8_t *)&event, sizeof(event));
 
         tft.setTextColor(ST77XX_YELLOW);
         tft.print("d" + String(i) + " ");
@@ -323,7 +324,8 @@ bool resetDataOnAllSlaves() {
         while (nextTime > millis())
             delay(1);
 
-        esp_now_send(DEVICE_MAC_ADDRESSES[i], (uint8_t *)&event, sizeof(event));
+        if (deviceHardResets[i] == 0)
+            esp_now_send(DEVICE_MAC_ADDRESSES[i], (uint8_t *)&event, sizeof(event));
 
         tft.setTextColor(ST77XX_YELLOW);
         tft.print("d" + String(i) + " ");

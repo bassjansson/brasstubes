@@ -50,6 +50,19 @@ int downloadMidiDataTries = 0;
 WiFiClient client;
 HTTPClient http;
 
+void onWiFiConnected(WiFiEvent_t event, WiFiEventInfo_t info) {
+    Serial.println("Connected to master WiFi!");
+    // TODO: call midi data download here?
+}
+
+void onWiFiDisconnected(WiFiEvent_t event, WiFiEventInfo_t info) {
+    Serial.println("Disconnected from master WiFi!");
+    // Serial.print("WiFi lost connection. Reason: ");
+    // Serial.println(info.disconnected.reason);
+    // Serial.println("Trying to Reconnect");
+    // WiFi.begin(ssid, password);
+}
+
 int httpGETRequest(const char *url, String &payload) {
     // Your Domain name with URL path or IP address with path
     http.begin(client, url);
@@ -149,12 +162,22 @@ void onDataReceived(const uint8_t *mac, const uint8_t *incomingData, int len) {
 
     if (event.cmd == ESP_NOW_EVENT_CHECK_DATA) {
         if (event.value > 0) {
+            // Start MIDI data download
             if (downloadMidiDataTries < 1) {
-                Serial.println("Connecting to WiFi...");
-                WiFi.begin(WIFI_SSID, WIFI_PASS);
                 downloadMidiDataTries = 3;
                 Serial.print("Starting MIDI data download, tries left: ");
                 Serial.println(downloadMidiDataTries);
+            }
+
+            // Connect to master device with WiFi
+            if (WiFi.status() != WL_CONNECTED) {
+                Serial.println("Connecting to master WiFi...");
+                WiFi.disconnect();
+                WiFi.begin(WIFI_SSID, WIFI_PASS);
+
+                // TODO: maybe this approach is better
+                // Serial.println("Not connected to master WiFi, reconnecting...");
+                // WiFi.reconnect();
             }
         } else {
             event.cmd = ESP_NOW_EVENT_CHECK_CONFIRM;
@@ -276,7 +299,9 @@ void setup() {
 
     // Init WiFi
     WiFi.mode(WIFI_STA);
-    WiFi.disconnect();
+    WiFi.disconnect(true);
+    WiFi.onEvent(onWiFiConnected, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_CONNECTED);
+    WiFi.onEvent(onWiFiDisconnected, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
 
     // Set MAC address
     Serial.print(" Default MAC Address:  ");
@@ -332,8 +357,8 @@ void loop() {
 
             parseMidiData(midiData);
 
+            Serial.println("Disconnecting from master WiFi...");
             WiFi.disconnect();
-            Serial.println("Disconnected from WiFi.");
 
             EspNowEvent event;
             event.cmd = ESP_NOW_EVENT_CHECK_CONFIRM;
