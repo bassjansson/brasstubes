@@ -170,10 +170,17 @@ void onDataReceived(const uint8_t *mac, const uint8_t *incomingData, int len) {
                 Serial.println(downloadMidiDataTries);
             }
 
-            // Restart if not connected to WiFi
-            if (hasBeenConnected && WiFi.status() != WL_CONNECTED) {
-                Serial.println("Not connected to master WiFi, restarting...");
-                requestRestart = true;
+            // Check if we were already connected
+            if (hasBeenConnected) {
+                // Restart if not connected to WiFi
+                if (WiFi.status() != WL_CONNECTED) {
+                    Serial.println("Not connected to master WiFi, restarting...");
+                    requestRestart = true;
+                }
+            } else {
+                // Connect to master device with WiFi
+                Serial.println("Connecting to master WiFi...");
+                WiFi.begin(WIFI_SSID, WIFI_PASS);
             }
         } else {
             event.cmd = ESP_NOW_EVENT_CHECK_CONFIRM;
@@ -327,10 +334,6 @@ void setup() {
         Serial.println("Failed to add the master as a peer.");
         return;
     }
-
-    // Connect to master device with WiFi
-    Serial.println("Connecting to master WiFi...");
-    WiFi.begin(WIFI_SSID, WIFI_PASS);
 
     // Make sure motor events is empty
     motorEvents.clear();
