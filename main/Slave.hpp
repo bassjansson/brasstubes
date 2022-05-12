@@ -56,9 +56,8 @@ void onWiFiConnected(WiFiEvent_t event, WiFiEventInfo_t info) {
 }
 
 void onWiFiDisconnected(WiFiEvent_t event, WiFiEventInfo_t info) {
-    Serial.println("Disconnected from master WiFi!");
-    // Serial.print("WiFi lost connection. Reason: ");
-    // Serial.println(info.disconnected.reason);
+    Serial.print("Disconnected from master WiFi! Reason: ");
+    Serial.println(info.disconnected.reason);
     // Serial.println("Trying to Reconnect");
     // WiFi.begin(ssid, password);
 }
@@ -356,8 +355,8 @@ void loop() {
 
             parseMidiData(midiData);
 
-            Serial.println("Disconnecting from master WiFi...");
-            WiFi.disconnect();
+            // Serial.println("Disconnecting from master WiFi...");
+            // WiFi.disconnect();
 
             EspNowEvent event;
             event.cmd = ESP_NOW_EVENT_CHECK_CONFIRM;
