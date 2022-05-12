@@ -171,13 +171,8 @@ void onDataReceived(const uint8_t *mac, const uint8_t *incomingData, int len) {
 
             // Connect to master device with WiFi
             if (WiFi.status() != WL_CONNECTED) {
-                Serial.println("Connecting to master WiFi...");
-                WiFi.disconnect();
-                WiFi.begin(WIFI_SSID, WIFI_PASS);
-
-                // TODO: maybe this approach is better
-                // Serial.println("Not connected to master WiFi, reconnecting...");
-                // WiFi.reconnect();
+                Serial.println("Not connected to master WiFi, reconnecting...");
+                WiFi.reconnect();
             }
         } else {
             event.cmd = ESP_NOW_EVENT_CHECK_CONFIRM;
@@ -299,7 +294,7 @@ void setup() {
 
     // Init WiFi
     WiFi.mode(WIFI_STA);
-    WiFi.disconnect(true);
+    WiFi.disconnect();
     WiFi.onEvent(onWiFiConnected, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_CONNECTED);
     WiFi.onEvent(onWiFiDisconnected, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
 
@@ -331,6 +326,10 @@ void setup() {
         Serial.println("Failed to add the master as a peer.");
         return;
     }
+
+    // Connect to master device with WiFi
+    Serial.println("Connecting to master WiFi...");
+    WiFi.begin(WIFI_SSID, WIFI_PASS);
 
     // Make sure motor events is empty
     motorEvents.clear();
